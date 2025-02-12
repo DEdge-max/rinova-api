@@ -14,7 +14,7 @@ import time
 from datetime import datetime
 
 router = APIRouter(
-    prefix="/api/v1",
+    
     tags=["Code Extraction"]
 )
 
