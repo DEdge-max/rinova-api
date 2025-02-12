@@ -9,7 +9,7 @@ logger = setup_logging()
 class OpenAIService:
     def __init__(self):
         settings = get_settings()
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.client = AsyncOpenAI(api_key=settings..OPENAI_API_KEY)
         self.model = settings.model_name
         self.timeout = settings.extraction_timeout
         
