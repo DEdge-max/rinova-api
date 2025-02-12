@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     
     # MongoDB Settings
-    mongodb_uri: str
+    MONGODB_URL: str  # Exactly matching your Render variable name
     mongodb_db_name: str = "rinova"
     
     # API Settings
@@ -26,10 +26,10 @@ class Settings(BaseSettings):
     
     class Config:
         env_file = ".env"
-        case_sensitive = False
+        case_sensitive = True
 
 @lru_cache()
-def get_settings() -> Settings:  
+def get_settings():
     return Settings()
 
 # Logging configuration function
