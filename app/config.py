@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     
     # MongoDB Settings
-    mongodb_url: str
+    mongodb_uri: str
     mongodb_db_name: str = "rinova"
     
     # API Settings
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         case_sensitive = False
 
 @lru_cache()
-def get_settings():
+def get_settings() -> Settings:  
     return Settings()
 
 # Logging configuration function
