@@ -29,13 +29,23 @@ app.include_router(
     tags=["Code Extraction"]
 )
 
-# CORS configuration
+# CORS configuration - Updated for development and production
+origins = [
+    "http://localhost:3000",      # React default dev port
+    "http://localhost:5173",      # Vite default dev port
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    # Add your frontend production URL when you have it
+    # "https://your-frontend-domain.com"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 @app.on_event("startup")
