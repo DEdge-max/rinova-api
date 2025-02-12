@@ -3,12 +3,12 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # OpenAI Settings
-    openai_api_key: str
+    OPENAI_API_KEY: str  # Changed to match Render's env variable case
     model_name: str = "gpt-4-turbo-preview"
     environment: str = "development"
     
     # MongoDB Settings
-    MONGODB_URL: str  # Exactly matching your Render variable name
+    MONGODB_URL: str
     mongodb_db_name: str = "rinova"
     
     # API Settings
