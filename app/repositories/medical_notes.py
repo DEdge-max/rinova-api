@@ -3,7 +3,6 @@ from typing import Optional, List, Dict, Tuple
 from bson import ObjectId
 from ..database.mongodb import db
 import logging
-from pymongo import IndexModel, ASCENDING, DESCENDING, TEXT
 from ..models.pydantic_models import (
     NotesFilterParams,
     NotesListingParams,
@@ -21,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 class MedicalNotesRepository:
     def __init__(self):
-        """Initialize repository and ensure indexes"""
-        self.ensure_indexes()
+        """Initialize repository without ensure_indexes (Handled in main.py)"""
+        pass  # Indexes are now created in startup_db_client in main.py
 
     async def get_dashboard_statistics(self, days: int = 30) -> DashboardStatistics:
         """Get comprehensive dashboard statistics"""
@@ -162,5 +161,5 @@ class MedicalNotesRepository:
                 documentation_quality=documentation_quality
             )
         except Exception as e:
-            logger.error(f"Failed to get dashboard statistics: {str(e)}")
+            logger.error(f"❌ Failed to get dashboard statistics: {str(e)}")
             raise
