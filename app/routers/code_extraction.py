@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from slowapi.middleware import LimiterMiddleware 
+from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel
 from ..services.openai_service import OpenAIService
 from ..dependencies.database import get_repository
@@ -40,9 +40,6 @@ router = APIRouter(
     tags=["Code Extraction"]
 )
 
-# Apply rate limiter middleware
-app.add_middleware(LimiterMiddleware, limiter=limiter)
-
 # Global error handler
 @router.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -52,6 +49,17 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"success": False, "error": str(exc)}
     )
 
+# Add rate limit exception handler
+@router.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={
+            "success": False,
+            "error": "Rate limit exceeded",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    )
 @router.post("/extract", response_model=ExtractionResponse, status_code=201)
 @limiter.limit("10/minute")
 async def extract_codes(
