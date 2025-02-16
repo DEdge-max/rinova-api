@@ -9,9 +9,9 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel
+# To these imports that match your structure
 from ..services.openai_service import OpenAIService
-from ..dependencies.database import get_repository
-from ..dependencies.services import get_openai_service
+from ..database.mongodb import db
 from ..models.pydantic_models import (
     ExtractionRequest,
     ExtractionResponse,
