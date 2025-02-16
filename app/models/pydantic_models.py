@@ -3,7 +3,95 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
 
-# Existing Extraction Models
+class Evidence(BaseModel):
+    """Model for evidence supporting code selection."""
+    direct_quotes: List[str] = Field(
+        default_factory=list,
+        description="Relevant text from note supporting this code"
+    )
+    reasoning: str = Field(
+        default="",
+        description="Detailed explanation of why this code was selected"
+    )
+    guidelines_applied: List[str] = Field(
+        default_factory=list,
+        description="Specific coding guidelines used"
+    )
+
+class AlternativeCode(BaseModel):
+    """Model for alternative CPT codes."""
+    code: str = Field(
+        ...,
+        description="The alternative CPT code",
+        example="99214"
+    )
+    description: str = Field(
+        ...,
+        description="Description of the alternative code",
+        example="Office/outpatient visit, established patient, moderate complexity"
+    )
+    required_documentation: str = Field(
+        ...,
+        description="Documentation needed to support this code",
+        example="Must document moderate complexity medical decision making"
+    )
+    why_considered: str = Field(
+        ...,
+        description="Explanation of why this is a potential alternative",
+        example="Visit complexity suggests potential for higher level code"
+    )
+
+class DocumentationGapImpact(BaseModel):
+    """Model for documentation gap impact details."""
+    affected_codes: List[str] = Field(
+        default_factory=list,
+        description="Codes impacted by this gap"
+    )
+    current_limitation: str = Field(
+        default="",
+        description="How this affects current code selection"
+    )
+    potential_improvement: str = Field(
+        default="",
+        description="What better codes could be used with proper documentation"
+    )
+
+class DocumentationGapRecommendation(BaseModel):
+    """Model for documentation gap recommendations."""
+    what_to_add: str = Field(
+        default="",
+        description="Specific guidance on documentation needed"
+    )
+    example: str = Field(
+        default="",
+        description="Example of proper documentation"
+    )
+    rationale: str = Field(
+        default="",
+        description="Why this documentation is important"
+    )
+
+class DocumentationGap(BaseModel):
+    """Model for documentation gaps."""
+    severity: str = Field(
+        ...,
+        description="Severity level of the gap",
+        example="moderate"
+    )
+    description: str = Field(
+        ...,
+        description="Specific missing or ambiguous element"
+    )
+    impact: DocumentationGapImpact = Field(
+        default_factory=DocumentationGapImpact,
+        description="Impact of the documentation gap"
+    )
+    recommendation: DocumentationGapRecommendation = Field(
+        default_factory=DocumentationGapRecommendation,
+        description="Recommendations for improvement"
+    )
+
+# Updated Existing Models
 class ExtractionRequest(BaseModel):
     """Request model for code extraction."""
     medical_text: str = Field(
@@ -37,6 +125,10 @@ class ICD10Code(BaseModel):
         description="Whether this is the primary diagnosis",
         example=True
     )
+    evidence: Optional[Evidence] = Field(
+        None,
+        description="Evidence supporting code selection"
+    )
 
 class CPTCode(BaseModel):
     """Represents a CPT procedure code."""
@@ -57,10 +149,13 @@ class CPTCode(BaseModel):
         description="Confidence score between 0 and 1",
         example=0.92
     )
-    category: str = Field(
-        ..., 
-        description="Category of the procedure",
-        example="Evaluation and Management"
+    evidence: Optional[Evidence] = Field(
+        None,
+        description="Evidence supporting code selection"
+    )
+    alternative_codes: List[AlternativeCode] = Field(
+        default_factory=list,
+        description="Potential alternative codes"
     )
 
 class Metadata(BaseModel):
@@ -88,6 +183,10 @@ class Metadata(BaseModel):
 
 class ExtractionData(BaseModel):
     """Container for extracted medical codes."""
+    note_type: str = Field(
+        default="brief",
+        description="Type of medical note"
+    )
     icd10_codes: List[ICD10Code] = Field(
         ..., 
         description="List of extracted ICD-10 codes"
@@ -95,6 +194,10 @@ class ExtractionData(BaseModel):
     cpt_codes: List[CPTCode] = Field(
         ..., 
         description="List of extracted CPT codes"
+    )
+    documentation_gaps: List[DocumentationGap] = Field(
+        default_factory=list,
+        description="List of identified documentation gaps"
     )
     metadata: Metadata = Field(
         ..., 
@@ -123,18 +226,18 @@ class ExtractionResponse(BaseModel):
             "example": {
                 "success": True,
                 "data": {
+                    "note_type": "brief",
                     "icd10_codes": [
                         {
                             "code": "E11.9",
                             "description": "Type 2 diabetes mellitus without complications",
                             "confidence": 0.95,
-                            "primary": True
-                        },
-                        {
-                            "code": "I10",
-                            "description": "Essential (primary) hypertension",
-                            "confidence": 0.88,
-                            "primary": False
+                            "primary": True,
+                            "evidence": {
+                                "direct_quotes": ["Patient has type 2 diabetes without complications"],
+                                "reasoning": "Clear documentation of diagnosis",
+                                "guidelines_applied": ["ICD-10 guideline I.A.19"]
+                            }
                         }
                     ],
                     "cpt_codes": [
@@ -142,9 +245,15 @@ class ExtractionResponse(BaseModel):
                             "code": "99213",
                             "description": "Office/outpatient visit for evaluation and management",
                             "confidence": 0.92,
-                            "category": "Evaluation and Management"
+                            "evidence": {
+                                "direct_quotes": ["Office visit level 3 for evaluation"],
+                                "reasoning": "Documentation supports level 3 visit",
+                                "guidelines_applied": ["E/M Guidelines 2021"]
+                            },
+                            "alternative_codes": []
                         }
                     ],
+                    "documentation_gaps": [],
                     "metadata": {
                         "model_version": "1.0",
                         "processing_time_ms": 245,
@@ -156,8 +265,7 @@ class ExtractionResponse(BaseModel):
             }
         }
 
-# New Models for Search and Analytics
-
+# Existing Search and Analytics Models - No Changes Needed
 class ExtractionStatus(str, Enum):
     """Enumeration of possible extraction statuses."""
     PENDING = "pending"
