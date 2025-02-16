@@ -31,9 +31,9 @@ app = FastAPI(
 # Rate Limiting Setup
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-app.add_middleware(SlowAPIMiddleware)  # Add this line to properly handle rate limiting
+app.add_middleware(SlowAPIMiddleware)
 
-# Add API Routers (removed prefix as it's already in the router)
+# Add API Routers
 app.include_router(
     code_extraction.router,
     tags=["Code Extraction"]
@@ -114,8 +114,7 @@ async def check_system_health() -> Dict[str, Any]:
     else:
         try:
             client = openai.OpenAI(api_key=openai_api_key)
-            models = openai.Model.list()
-            status["services"]["openai"] = {"status": "healthy", "models_available": len(models.data)}
+            status["services"]["openai"] = {"status": "healthy"}
         except Exception as e:
             logger.error(f"OpenAI API health check failed: {str(e)}")
             status["services"]["openai"] = {"status": "unhealthy", "error": str(e)}
@@ -146,7 +145,7 @@ async def shutdown_db_client():
 
 # Root Endpoint
 @app.get("/", tags=["Health"])
-async def root():
+async def root(request: Request):
     return {
         "status": "success",
         "message": "Welcome to Rinova API",
@@ -158,8 +157,9 @@ async def root():
 # Enhanced Health Check with Rate Limiting
 @app.get("/health", tags=["Health"])
 @limiter.limit("5/minute")
-async def health_check(request: Request):  # Added request parameter
+async def health_check(request: Request):
     return await check_system_health()
+
 # Exception Handlers
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
