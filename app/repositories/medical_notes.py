@@ -31,8 +31,7 @@ class MedicalNotesRepository:
                 {"status": ExtractionStatus.COMPLETED.value}
             )
 
-            # Ensure zero-division protection
-            total_notes = max(total_notes, 1)
+            total_notes = max(total_notes, 1)  # Prevent zero-division
 
             # Status breakdown
             status_breakdown = [
@@ -145,7 +144,7 @@ class MedicalNotesRepository:
                 common_icd10_codes=common_icd10_codes or [],
                 common_cpt_codes=common_cpt_codes or [],
                 daily_extraction_counts=daily_extraction_counts or [],
-                documentation_quality=documentation_quality or {"completeness": 0, "accuracy": 0, "timeliness": 0}
+                documentation_quality=documentation_quality
             )
         except Exception as e:
             logger.error(f"Failed to get dashboard statistics: {str(e)}")
@@ -178,4 +177,19 @@ class MedicalNotesRepository:
             return (total_score / max(len(notes), 1)) * 100
         except Exception as e:
             logger.error(f"Error calculating accuracy: {str(e)}")
+            return 0.0
+
+    async def _calculate_documentation_timeliness(self, notes: List[Dict]) -> float:
+        """Calculate timeliness of documentation processing"""
+        try:
+            total_score = sum(
+                (1.0 if (updated_at - created_at).total_seconds() < 5 else 
+                 0.8 if (updated_at - created_at).total_seconds() < 10 else 
+                 0.6 if (updated_at - created_at).total_seconds() < 30 else 0.4) -
+                max(0, (note.get('extraction_attempts', 1) - 1) * 0.1)
+                for note in notes if (created_at := note.get('created_at')) and (updated_at := note.get('updated_at'))
+            )
+            return (total_score / max(len(notes), 1)) * 100
+        except Exception as e:
+            logger.error(f"Error calculating timeliness: {str(e)}")
             return 0.0
