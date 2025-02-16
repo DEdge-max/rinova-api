@@ -7,14 +7,15 @@ from ..models.pydantic_models import (
     ExtractionData,
     ICD10Code,
     CPTCode,
-    Metadata
+    Metadata,
+    Evidence,
+    DocumentationGap
 )
 from ..repositories.medical_notes import MedicalNotesRepository
 import time
 from datetime import datetime
 
 router = APIRouter(
-    
     tags=["Code Extraction"]
 )
 
@@ -26,7 +27,7 @@ medical_notes_repo = MedicalNotesRepository()
     response_model=ExtractionResponse,
     response_model_exclude_unset=True,
     summary="Extract medical codes from text",
-    description="Analyzes medical text to extract ICD-10 diagnostic codes and CPT procedure codes with confidence scores",
+    description="Analyzes medical text to extract ICD-10 diagnostic codes and CPT procedure codes with confidence scores, evidence, and documentation gaps",
     responses={
         200: {
             "model": ExtractionResponse,
@@ -36,12 +37,18 @@ medical_notes_repo = MedicalNotesRepository()
                     "example": {
                         "success": True,
                         "data": {
+                            "note_type": "brief",
                             "icd10_codes": [
                                 {
                                     "code": "E11.9",
                                     "description": "Type 2 diabetes mellitus without complications",
                                     "confidence": 0.95,
-                                    "primary": True
+                                    "primary": True,
+                                    "evidence": {
+                                        "direct_quotes": ["Patient has type 2 diabetes without complications"],
+                                        "reasoning": "Clear documentation of diagnosis",
+                                        "guidelines_applied": ["ICD-10 guideline I.A.19"]
+                                    }
                                 }
                             ],
                             "cpt_codes": [
@@ -49,7 +56,28 @@ medical_notes_repo = MedicalNotesRepository()
                                     "code": "99213",
                                     "description": "Office/outpatient visit for evaluation and management",
                                     "confidence": 0.92,
-                                    "category": "Evaluation and Management"
+                                    "evidence": {
+                                        "direct_quotes": ["Office visit level 3 for evaluation"],
+                                        "reasoning": "Documentation supports level 3 visit",
+                                        "guidelines_applied": ["E/M Guidelines 2021"]
+                                    },
+                                    "alternative_codes": []
+                                }
+                            ],
+                            "documentation_gaps": [
+                                {
+                                    "severity": "minor",
+                                    "description": "Missing specific duration of symptoms",
+                                    "impact": {
+                                        "affected_codes": ["99213"],
+                                        "current_limitation": "Could affect E/M level",
+                                        "potential_improvement": "Could support higher level E/M code"
+                                    },
+                                    "recommendation": {
+                                        "what_to_add": "Document symptom duration",
+                                        "example": "Symptoms present for 2 weeks",
+                                        "rationale": "Helps establish medical necessity"
+                                    }
                                 }
                             ],
                             "metadata": {
@@ -73,6 +101,7 @@ async def extract_codes(
 ) -> ExtractionResponse:
     """
     Extract medical codes from the provided clinical text and store in MongoDB.
+    Includes code evidence, documentation gaps, and note type classification.
     """
     start_time = time.time()
     
@@ -81,7 +110,7 @@ async def extract_codes(
         note_id = await medical_notes_repo.create_note(request.medical_text)
         
         # Extract codes using OpenAI
-        extracted_codes = await openai_service.extract_medical_codes(request.medical_text)
+        extracted_data = await openai_service.extract_medical_codes(request.medical_text)
         
         # Calculate processing time
         processing_time = int((time.time() - start_time) * 1000)
@@ -94,10 +123,12 @@ async def extract_codes(
             note_length=len(request.medical_text)
         )
         
-        # Create extraction data
+        # Create extraction data with new fields
         data = ExtractionData(
-            icd10_codes=extracted_codes["icd10_codes"],
-            cpt_codes=extracted_codes["cpt_codes"],
+            note_type=extracted_data.get("note_type", "brief"),
+            icd10_codes=extracted_data["icd10_codes"],
+            cpt_codes=extracted_data["cpt_codes"],
+            documentation_gaps=extracted_data.get("documentation_gaps", []),
             metadata=metadata
         )
         
