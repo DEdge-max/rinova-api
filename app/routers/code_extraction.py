@@ -1,62 +1,73 @@
-from fastapi import APIRouter, HTTPException, Query
+import logging
+import time
+import asyncio
+from datetime import datetime, date
 from typing import Dict, Any, List, Optional
+from fastapi import APIRouter, HTTPException, Query, Depends, Request, Response
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from fastapi.middleware.limiter import LimiterMiddleware
+from pydantic import BaseModel
 from ..services.openai_service import OpenAIService
+from ..dependencies.database import get_repository
+from ..dependencies.services import get_openai_service
 from ..models.pydantic_models import (
     ExtractionRequest,
     ExtractionResponse,
     ExtractionData,
-    ICD10Code,
-    CPTCode,
     Metadata,
-    Evidence,
-    DocumentationGap,
     NotesListingParams,
     NotesFilterParams,
     NotesListingResponse,
     DashboardStatistics,
     SortOrder,
     NoteType,
-    ExtractionStatus
+    ExtractionStatus,
+    BatchExtractionRequest
 )
 from ..repositories.medical_notes import MedicalNotesRepository
-import time
-from datetime import datetime, date
-from fastapi.responses import JSONResponse
+
+# Configure logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+# Rate limiter setup
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(
+    prefix="/api/v1",
     tags=["Code Extraction"]
 )
 
-openai_service = OpenAIService()
-medical_notes_repo = MedicalNotesRepository()
+# Apply rate limiter middleware
+app.add_middleware(LimiterMiddleware, limiter=limiter)
 
-@router.post(
-    "/extract",
-    response_model=ExtractionResponse,
-    response_model_exclude_unset=True,
-    summary="Extract medical codes from text",
-    description="Analyzes medical text to extract ICD-10 diagnostic codes and CPT procedure codes with confidence scores, evidence, and documentation gaps"
-)
+# Global error handler
+@router.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global error handler caught: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "error": str(exc)}
+    )
+
+@router.post("/extract", response_model=ExtractionResponse, status_code=201)
+@limiter.limit("10/minute")
 async def extract_codes(
-    request: ExtractionRequest
+    request: ExtractionRequest,
+    openai_service: OpenAIService = Depends(get_openai_service),
+    repo: MedicalNotesRepository = Depends(get_repository)
 ) -> ExtractionResponse:
-    """
-    Extract medical codes from the provided clinical text and store in MongoDB.
-    Includes code evidence, documentation gaps, and note type classification.
-    """
+    """ Extract medical codes from clinical text and store them in MongoDB. """
+    logger.info(f"Processing extraction request with {len(request.medical_text)} characters")
     start_time = time.time()
     
     try:
-        # Store the incoming text first
-        note_id = await medical_notes_repo.create_note(request.medical_text)
-        
-        # Extract codes using OpenAI
+        note_id = await repo.create_note(request.medical_text)
         extracted_data = await openai_service.extract_medical_codes(request.medical_text)
-        
-        # Calculate processing time
         processing_time = int((time.time() - start_time) * 1000)
         
-        # Create metadata
         metadata = Metadata(
             model_version="1.0",
             processing_time_ms=processing_time,
@@ -64,7 +75,6 @@ async def extract_codes(
             note_length=len(request.medical_text)
         )
         
-        # Create extraction data with new fields
         data = ExtractionData(
             note_type=extracted_data.get("note_type", "brief"),
             icd10_codes=extracted_data["icd10_codes"],
@@ -73,165 +83,84 @@ async def extract_codes(
             metadata=metadata
         )
         
-        # Store the extraction results
-        await medical_notes_repo.update_extraction(note_id, data.dict())
-        
-        return ExtractionResponse(
-            success=True,
-            data=data,
-            error=None
-        )
+        await repo.update_extraction(note_id, data.dict())
+        return ExtractionResponse(success=True, data=data, error=None)
         
     except Exception as e:
-        # Log the error here if you have logging configured
-        return ExtractionResponse(
-            success=False,
-            data=None,
-            error=str(e)
-        )
+        logger.error(f"Error in extraction: {str(e)}", exc_info=True)
+        return ExtractionResponse(success=False, data=None, error=str(e))
 
-@router.get(
-    "/notes",
-    response_model=NotesListingResponse,
-    summary="Get paginated notes listing",
-    description="Retrieve medical notes with pagination, sorting, and filtering options"
-)
+@router.post("/extract/batch", response_model=List[ExtractionResponse], status_code=201)
+@limiter.limit("5/minute")
+async def batch_extract_codes(
+    requests: BatchExtractionRequest,
+    openai_service: OpenAIService = Depends(get_openai_service),
+    repo: MedicalNotesRepository = Depends(get_repository)
+):
+    """ Process multiple medical texts in one request asynchronously. """
+    logger.info(f"Processing batch extraction with {len(requests.texts)} texts")
+    tasks = [extract_codes(ExtractionRequest(medical_text=text), openai_service, repo) for text in requests.texts]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    return results
+
+@router.get("/notes", response_model=NotesListingResponse)
+@limiter.limit("20/minute")
 async def get_notes_listing(
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
-    sort_by: str = Query("created_at", description="Field to sort by"),
-    sort_order: SortOrder = Query(SortOrder.DESCENDING, description="Sort order"),
-    note_type: Optional[NoteType] = Query(None, description="Filter by note type"),
-    status: Optional[ExtractionStatus] = Query(None, description="Filter by status"),
-    patient_id: Optional[str] = Query(None, description="Filter by patient ID"),
-    start_date: Optional[date] = Query(None, description="Filter by start date"),
-    end_date: Optional[date] = Query(None, description="Filter by end date"),
-    search_query: Optional[str] = Query(None, description="Text search query")
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    repo: MedicalNotesRepository = Depends(get_repository)
 ):
-    """Get paginated listing of medical notes with filtering options"""
+    """ Get paginated listing of medical notes. """
     try:
-        # Convert dates to datetime if provided
-        start_datetime = datetime.combine(start_date, datetime.min.time()) if start_date else None
-        end_datetime = datetime.combine(end_date, datetime.max.time()) if end_date else None
-        
-        # Create filter parameters
-        filters = NotesFilterParams(
-            note_type=note_type,
-            status=status,
-            patient_id=patient_id,
-            start_date=start_datetime,
-            end_date=end_datetime,
-            search_query=search_query
-        )
-        
-        # Create listing parameters
-        params = NotesListingParams(
-            page=page,
-            page_size=page_size,
-            sort_by=sort_by,
-            sort_order=sort_order,
-            filters=filters
-        )
-        
-        # Get notes and summary
-        notes, summary = await medical_notes_repo.get_notes_listing(params)
-        
-        return NotesListingResponse(
-            success=True,
-            summary=summary,
-            notes=notes,
-            error=None
-        )
+        params = NotesListingParams(page=page, page_size=page_size)
+        notes, summary = await repo.get_notes_listing(params)
+        return NotesListingResponse(success=True, summary=summary, notes=notes, error=None)
         
     except Exception as e:
-        return NotesListingResponse(
-            success=False,
-            summary=None,
-            notes=[],
-            error=str(e)
-        )
+        logger.error(f"Error getting notes listing: {str(e)}", exc_info=True)
+        return NotesListingResponse(success=False, summary=None, notes=[], error=str(e))
 
-@router.get(
-    "/notes/dashboard",
-    response_model=Dict[str, Any],
-    summary="Get dashboard statistics",
-    description="Retrieve comprehensive dashboard statistics and analytics"
-)
+@router.get("/notes/dashboard", response_model=Dict[str, Any])
+@limiter.limit("5/minute")
 async def get_dashboard_statistics(
-    days: int = Query(30, ge=1, le=365, description="Number of days to analyze")
+    days: int = Query(30, ge=1, le=365)
 ):
-    """Get dashboard statistics and analytics"""
+    """ Fetch dashboard statistics. """
     try:
-        stats = await medical_notes_repo.get_dashboard_statistics(days)
-        return {
-            "success": True,
-            "data": stats,
-            "error": None
-        }
+        stats = await repo.get_dashboard_statistics(days)
+        return {"success": True, "data": stats, "error": None}
     except Exception as e:
-        return {
-            "success": False,
-            "data": None,
-            "error": str(e)
-        }
+        return {"success": False, "data": None, "error": str(e)}
 
-@router.get(
-    "/recent",
-    response_model=List[Dict],
-    summary="Get recent extractions",
-    description="Retrieve recent medical note extractions"
-)
-async def get_recent_extractions(limit: int = Query(10, ge=1, le=50)):
-    """Get recent extractions for display/example purposes"""
-    try:
-        return await medical_notes_repo.get_recent_notes(limit)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get(
-    "/extraction/{note_id}",
-    response_model=Dict,
-    summary="Get specific extraction",
-    description="Retrieve a specific medical note extraction by ID"
-)
-async def get_extraction(note_id: str):
-    """Get a specific extraction by ID"""
-    try:
-        note = await medical_notes_repo.get_note(note_id)
-        if not note:
-            raise HTTPException(status_code=404, detail="Note not found")
-        return note
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get(
-    "/search",
-    response_model=List[Dict],
-    summary="Search notes",
-    description="Search medical notes using text query"
-)
+@router.get("/search", response_model=List[Dict])
+@limiter.limit("15/minute")
 async def search_notes(
-    query: str = Query(..., min_length=1, description="Search query"),
-    limit: int = Query(10, ge=1, le=50, description="Maximum number of results")
+    query: str = Query(..., min_length=1),
+    limit: int = Query(10, ge=1, le=50)
 ):
-    """Search notes using text search"""
+    """ Search notes using text search. """
     try:
-        return await medical_notes_repo.search_notes(query, limit)
+        return await repo.search_notes(query, limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get(
-    "/notes/type/{note_type}",
-    response_model=List[Dict],
-    summary="Get notes by type",
-    description="Retrieve medical notes of a specific type"
-)
+@router.get("/notes/type/{note_type}", response_model=List[Dict])
+@limiter.limit("10/minute")
 async def get_notes_by_type(
     note_type: NoteType,
     limit: int = Query(10, ge=1, le=50)
 ):
-    """Get notes of a specific type"""
+    """ Get notes of a specific type. """
     try:
-        return await medical_notes_repo.get_notes_by_type(note_type.value, limit)
+        return await repo.get_notes_by_type(note_type.value, limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/health")
+async def health_check():
+    """ API health check endpoint """
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0"
+    }
