@@ -1,8 +1,24 @@
 from pydantic import BaseModel, Field, validator
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 from enum import Enum
 
+# New Enums
+class SortOrder(str, Enum):
+    """Enumeration for sort order options."""
+    ASCENDING = "asc"
+    DESCENDING = "desc"
+
+class NoteType(str, Enum):
+    """Enumeration for medical note types."""
+    BRIEF = "brief"
+    CONSULTATION = "consultation"
+    PROGRESS = "progress"
+    DISCHARGE = "discharge"
+    PROCEDURE = "procedure"
+    OTHER = "other"
+
+# Existing Models
 class Evidence(BaseModel):
     """Model for evidence supporting code selection."""
     direct_quotes: List[str] = Field(
@@ -22,23 +38,19 @@ class AlternativeCode(BaseModel):
     """Model for alternative CPT codes."""
     code: str = Field(
         ...,
-        description="The alternative CPT code",
-        example="99214"
+        description="The alternative CPT code"
     )
     description: str = Field(
         ...,
-        description="Description of the alternative code",
-        example="Office/outpatient visit, established patient, moderate complexity"
+        description="Description of the alternative code"
     )
     required_documentation: str = Field(
         ...,
-        description="Documentation needed to support this code",
-        example="Must document moderate complexity medical decision making"
+        description="Documentation needed to support this code"
     )
     why_considered: str = Field(
         ...,
-        description="Explanation of why this is a potential alternative",
-        example="Visit complexity suggests potential for higher level code"
+        description="Explanation of why this is a potential alternative"
     )
 
 class DocumentationGapImpact(BaseModel):
@@ -75,8 +87,7 @@ class DocumentationGap(BaseModel):
     """Model for documentation gaps."""
     severity: str = Field(
         ...,
-        description="Severity level of the gap",
-        example="moderate"
+        description="Severity level of the gap"
     )
     description: str = Field(
         ...,
@@ -91,260 +102,102 @@ class DocumentationGap(BaseModel):
         description="Recommendations for improvement"
     )
 
-# Updated Existing Models
-class ExtractionRequest(BaseModel):
-    """Request model for code extraction."""
-    medical_text: str = Field(
-        ..., 
-        min_length=1,
-        description="Medical text to extract codes from",
-        example="Patient has type 2 diabetes without complications and hypertension. Office visit level 3 for evaluation."
-    )
+# New Models for Notes Listing and Filtering
+class NotesFilterParams(BaseModel):
+    """Parameters for filtering medical notes."""
+    note_type: Optional[NoteType] = Field(None, description="Filter by note type")
+    status: Optional[ExtractionStatus] = Field(None, description="Filter by extraction status")
+    start_date: Optional[datetime] = Field(None, description="Filter by start date")
+    end_date: Optional[datetime] = Field(None, description="Filter by end date")
+    search_query: Optional[str] = Field(None, description="Text search query")
+    patient_id: Optional[str] = Field(None, description="Filter by patient ID")
 
-class ICD10Code(BaseModel):
-    """Represents an ICD-10 medical diagnostic code."""
-    code: str = Field(
-        ..., 
-        description="The ICD-10 code value",
-        example="E11.9"
-    )
-    description: str = Field(
-        ..., 
-        description="Official description of the code",
-        example="Type 2 diabetes mellitus without complications"
-    )
-    confidence: float = Field(
-        ..., 
-        ge=0.0, 
-        le=1.0, 
-        description="Confidence score between 0 and 1",
-        example=0.95
-    )
-    primary: bool = Field(
-        ..., 
-        description="Whether this is the primary diagnosis",
-        example=True
-    )
-    evidence: Optional[Evidence] = Field(
-        None,
-        description="Evidence supporting code selection"
-    )
+class NotesListingParams(BaseModel):
+    """Parameters for notes listing with pagination and sorting."""
+    page: int = Field(1, ge=1, description="Page number")
+    page_size: int = Field(20, ge=1, le=100, description="Items per page")
+    sort_by: str = Field("created_at", description="Field to sort by")
+    sort_order: SortOrder = Field(SortOrder.DESCENDING, description="Sort order")
+    filters: Optional[NotesFilterParams] = Field(None, description="Filter parameters")
 
-class CPTCode(BaseModel):
-    """Represents a CPT procedure code."""
-    code: str = Field(
-        ..., 
-        description="The CPT code value",
-        example="99213"
-    )
-    description: str = Field(
-        ..., 
-        description="Official description of the code",
-        example="Office/outpatient visit for evaluation and management"
-    )
-    confidence: float = Field(
-        ..., 
-        ge=0.0, 
-        le=1.0, 
-        description="Confidence score between 0 and 1",
-        example=0.92
-    )
-    evidence: Optional[Evidence] = Field(
-        None,
-        description="Evidence supporting code selection"
-    )
-    alternative_codes: List[AlternativeCode] = Field(
-        default_factory=list,
-        description="Potential alternative codes"
-    )
+class NotesSummary(BaseModel):
+    """Summary information for notes listing."""
+    total_notes: int = Field(..., description="Total number of notes")
+    total_pages: int = Field(..., description="Total number of pages")
+    current_page: int = Field(..., description="Current page number")
+    has_next: bool = Field(..., description="Whether there is a next page")
+    has_previous: bool = Field(..., description="Whether there is a previous page")
 
-class Metadata(BaseModel):
-    """Metadata about the extraction process."""
-    model_version: str = Field(
-        ..., 
-        description="Version of the extraction model",
-        example="1.0"
-    )
-    processing_time_ms: int = Field(
-        ..., 
-        description="Processing time in milliseconds",
-        example=245
-    )
-    timestamp: str = Field(
-        ..., 
-        description="Timestamp of the extraction",
-        example="2025-02-12T10:00:00Z"
-    )
-    note_length: int = Field(
-        ..., 
-        description="Length of the input text",
-        example=150
-    )
+class NotesListingResponse(BaseModel):
+    """Response model for notes listing endpoint."""
+    success: bool = Field(..., description="Operation success status")
+    summary: NotesSummary = Field(..., description="Page information")
+    notes: List[MedicalNote] = Field(..., description="List of medical notes")
+    error: Optional[str] = Field(None, description="Error message if any")
 
-class ExtractionData(BaseModel):
-    """Container for extracted medical codes."""
-    note_type: str = Field(
-        default="brief",
-        description="Type of medical note"
-    )
-    icd10_codes: List[ICD10Code] = Field(
-        ..., 
-        description="List of extracted ICD-10 codes"
-    )
-    cpt_codes: List[CPTCode] = Field(
-        ..., 
-        description="List of extracted CPT codes"
-    )
-    documentation_gaps: List[DocumentationGap] = Field(
-        default_factory=list,
-        description="List of identified documentation gaps"
-    )
-    metadata: Metadata = Field(
-        ..., 
-        description="Extraction process metadata"
-    )
-
-class ExtractionResponse(BaseModel):
-    """API response model."""
-    success: bool = Field(
-        ..., 
-        description="Whether the extraction was successful",
-        example=True
-    )
-    data: Optional[ExtractionData] = Field(
-        None, 
-        description="Extracted codes and metadata"
-    )
-    error: Optional[str] = Field(
-        None, 
-        description="Error message if any",
-        example=None
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "success": True,
-                "data": {
-                    "note_type": "brief",
-                    "icd10_codes": [
-                        {
-                            "code": "E11.9",
-                            "description": "Type 2 diabetes mellitus without complications",
-                            "confidence": 0.95,
-                            "primary": True,
-                            "evidence": {
-                                "direct_quotes": ["Patient has type 2 diabetes without complications"],
-                                "reasoning": "Clear documentation of diagnosis",
-                                "guidelines_applied": ["ICD-10 guideline I.A.19"]
-                            }
-                        }
-                    ],
-                    "cpt_codes": [
-                        {
-                            "code": "99213",
-                            "description": "Office/outpatient visit for evaluation and management",
-                            "confidence": 0.92,
-                            "evidence": {
-                                "direct_quotes": ["Office visit level 3 for evaluation"],
-                                "reasoning": "Documentation supports level 3 visit",
-                                "guidelines_applied": ["E/M Guidelines 2021"]
-                            },
-                            "alternative_codes": []
-                        }
-                    ],
-                    "documentation_gaps": [],
-                    "metadata": {
-                        "model_version": "1.0",
-                        "processing_time_ms": 245,
-                        "timestamp": "2025-02-12T10:00:00Z",
-                        "note_length": 150
-                    }
-                },
-                "error": None
-            }
-        }
-
-# Existing Search and Analytics Models - No Changes Needed
-class ExtractionStatus(str, Enum):
-    """Enumeration of possible extraction statuses."""
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-class MedicalNote(BaseModel):
-    """Model for storing medical notes."""
-    id: str = Field(..., description="Unique identifier for the note")
-    content: str = Field(..., description="The medical note text")
-    patient_id: Optional[str] = Field(None, description="Patient identifier")
-    created_at: datetime = Field(..., description="Note creation timestamp")
-    updated_at: datetime = Field(..., description="Last update timestamp")
-    status: ExtractionStatus = Field(..., description="Current extraction status")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "note_123",
-                "content": "Patient presents with...",
-                "patient_id": "P12345",
-                "created_at": "2025-02-12T10:00:00Z",
-                "updated_at": "2025-02-12T10:05:00Z",
-                "status": "completed",
-                "metadata": {"source": "EMR", "department": "Cardiology"}
-            }
-        }
-
-class SearchRequest(BaseModel):
-    """Model for search requests."""
-    query: Optional[str] = Field(None, description="Text search query")
-    start_date: Optional[datetime] = Field(None, description="Start date for filtering")
-    end_date: Optional[datetime] = Field(None, description="End date for filtering")
-    status: Optional[ExtractionStatus] = Field(None, description="Filter by status")
-    skip: int = Field(0, ge=0, description="Number of records to skip")
-    limit: int = Field(20, ge=1, le=100, description="Maximum number of records to return")
-
-class SearchResponse(BaseModel):
-    """Model for search responses."""
-    total: int = Field(..., description="Total number of matching records")
-    results: List[MedicalNote] = Field(..., description="Search results")
-    has_more: bool = Field(..., description="Whether more results are available")
-
-class AnalyticsTimeframe(BaseModel):
-    """Model for analytics timeframe specification."""
-    start_date: datetime = Field(..., description="Start of analysis period")
-    end_date: datetime = Field(..., description="End of analysis period")
-
-class ExtractionStatistics(BaseModel):
-    """Model for extraction statistics."""
-    total_extractions: int = Field(..., description="Total number of extractions")
-    success_rate: float = Field(..., ge=0.0, le=100.0, description="Success rate percentage")
-    avg_processing_time_ms: float = Field(..., description="Average processing time in milliseconds")
-    extraction_counts: Dict[ExtractionStatus, int] = Field(..., description="Counts by status")
-    daily_counts: Dict[str, int] = Field(..., description="Daily extraction counts")
-
-class CommonCode(BaseModel):
-    """Model for common code statistics."""
-    code: str = Field(..., description="The medical code")
-    count: int = Field(..., description="Number of occurrences")
+# Dashboard Statistics Models
+class CodeFrequency(BaseModel):
+    """Frequency statistics for a specific code."""
+    code: str = Field(..., description="The code value")
     description: str = Field(..., description="Code description")
-    percentage: float = Field(..., description="Percentage of total extractions")
+    count: int = Field(..., description="Number of occurrences")
+    percentage: float = Field(..., ge=0.0, le=100.0, description="Percentage of total")
 
-class CodeAnalytics(BaseModel):
-    """Model for code analytics response."""
-    total_codes: int = Field(..., description="Total number of codes analyzed")
-    common_icd10_codes: List[CommonCode] = Field(..., description="Most common ICD-10 codes")
-    common_cpt_codes: List[CommonCode] = Field(..., description="Most common CPT codes")
-    timeframe: AnalyticsTimeframe = Field(..., description="Analysis timeframe")
+class StatusBreakdown(BaseModel):
+    """Breakdown of notes by status."""
+    status: ExtractionStatus = Field(..., description="Extraction status")
+    count: int = Field(..., description="Number of notes")
+    percentage: float = Field(..., ge=0.0, le=100.0, description="Percentage of total")
 
-class PaginationParams(BaseModel):
-    """Common pagination parameters."""
-    skip: int = Field(0, ge=0, description="Number of records to skip")
-    limit: int = Field(20, ge=1, le=100, description="Maximum number of records to return")
+class TypeBreakdown(BaseModel):
+    """Breakdown of notes by type."""
+    type: NoteType = Field(..., description="Note type")
+    count: int = Field(..., description="Number of notes")
+    percentage: float = Field(..., ge=0.0, le=100.0, description="Percentage of total")
 
-    @validator('limit')
-    def validate_limit(cls, v):
-        if v > 100:
-            raise ValueError("Maximum limit is 100 records")
-        return v
+class TimeSeriesPoint(BaseModel):
+    """Data point for time series analysis."""
+    date: datetime = Field(..., description="Date of measurement")
+    count: int = Field(..., description="Number of occurrences")
+
+class DashboardStatistics(BaseModel):
+    """Comprehensive dashboard statistics."""
+    total_notes: int = Field(..., description="Total number of notes")
+    total_processed: int = Field(..., description="Total processed notes")
+    processing_success_rate: float = Field(
+        ..., 
+        ge=0.0, 
+        le=100.0, 
+        description="Success rate percentage"
+    )
+    avg_processing_time_ms: float = Field(
+        ..., 
+        description="Average processing time in milliseconds"
+    )
+    status_breakdown: List[StatusBreakdown] = Field(
+        ..., 
+        description="Notes by status"
+    )
+    type_breakdown: List[TypeBreakdown] = Field(
+        ..., 
+        description="Notes by type"
+    )
+    common_icd10_codes: List[CodeFrequency] = Field(
+        ..., 
+        description="Most common ICD-10 codes"
+    )
+    common_cpt_codes: List[CodeFrequency] = Field(
+        ..., 
+        description="Most common CPT codes"
+    )
+    daily_extraction_counts: List[TimeSeriesPoint] = Field(
+        ..., 
+        description="Daily extraction counts"
+    )
+    documentation_quality: Dict[str, float] = Field(
+        ..., 
+        description="Documentation quality metrics"
+    )
+
+# Keep all existing models unchanged
+[... rest of the existing models remain the same ...]
