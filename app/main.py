@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from slowapi.middleware import LimiterMiddleware
+from slowapi.errors import RateLimitExceeded
 from datetime import datetime, timedelta
 import uvicorn
 import openai
@@ -27,9 +27,9 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# ✅ Rate Limiting Middleware Setup
+# ✅ Rate Limiting Setup
 limiter = Limiter(key_func=get_remote_address)
-app.add_middleware(LimiterMiddleware, limiter=limiter)
+app.state.limiter = limiter
 
 # ✅ Add API Routers
 app.include_router(
@@ -162,6 +162,22 @@ async def root():
 @limiter.limit("5/minute")  # ✅ Added Rate Limiting
 async def health_check():
     return await check_system_health()
+
+# ✅ Rate Limit Exception Handler
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={
+            "success": False,
+            "error": {
+                "code": 429,
+                "message": "Too many requests",
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            "data": None
+        }
+    )
 
 # ✅ Improved Exception Handling
 @app.exception_handler(HTTPException)
