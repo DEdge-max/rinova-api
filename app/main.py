@@ -11,6 +11,7 @@ import openai
 import logging
 import os
 from typing import Dict, Any
+from pymongo import IndexModel, ASCENDING, DESCENDING, TEXT
 
 from app.routers import code_extraction
 from app.database.mongodb import db
@@ -124,17 +125,39 @@ async def check_system_health() -> Dict[str, Any]:
 
     return status
 
-# Database Connection Handling
+# Database Connection Handling & Index Creation
 @app.on_event("startup")
 async def startup_db_client():
-    """Initialize database connection and perform startup checks"""
+    """Initialize database connection, perform startup checks, and create indexes"""
     try:
         await db.connect_to_mongodb()
         await db.client.admin.command('ping')
-        logger.info("Connected to MongoDB!")
+        logger.info("✅ Connected to MongoDB!")
+
+        # ✅ Step 2: Create necessary indexes
+        try:
+            collection = db.medical_notes  # Ensure MongoDB connection is ready
+            indexes = [
+                IndexModel([("created_at", DESCENDING)], background=True),
+                IndexModel([("status", ASCENDING)], background=True),
+                IndexModel([("text", TEXT)], background=True),
+                IndexModel([("extraction.note_type", ASCENDING)], background=True),
+                IndexModel([("patient_id", ASCENDING)], background=True),
+                IndexModel([
+                    ("extraction.icd10_codes.code", ASCENDING),
+                    ("extraction.cpt_codes.code", ASCENDING)
+                ], background=True)
+            ]
+            await collection.create_indexes(indexes)
+            logger.info("✅ Database indexes created successfully during startup.")
+        except Exception as e:
+            logger.error(f"❌ Failed to create indexes during startup: {str(e)}")
+
+        # ✅ Step 3: Run health check after all setups
         await check_system_health()
+
     except Exception as e:
-        logger.error(f"Failed to connect to MongoDB: {str(e)}")
+        logger.error(f"❌ Failed to connect to MongoDB: {str(e)}")
         raise
 
 @app.on_event("shutdown")
@@ -188,24 +211,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "error": {
                 "code": exc.status_code,
                 "message": exc.detail,
-                "timestamp": datetime.utcnow().isoformat()
-            },
-            "data": None
-        }
-    )
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
-    """Handle all other exceptions"""
-    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "success": False,
-            "error": {
-                "code": 500,
-                "message": "Internal server error",
-                "detail": str(exc),
                 "timestamp": datetime.utcnow().isoformat()
             },
             "data": None
