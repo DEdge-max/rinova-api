@@ -6,12 +6,12 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from datetime import datetime, timedelta
+from pymongo import IndexModel, ASCENDING, DESCENDING, TEXT
 import uvicorn
 import openai
 import logging
 import os
 from typing import Dict, Any
-from pymongo import IndexModel, ASCENDING, DESCENDING, TEXT
 
 from app.routers import code_extraction
 from app.database.mongodb import db
@@ -79,30 +79,10 @@ async def check_system_health() -> Dict[str, Any]:
         db_stats = await db.db.command("dbStats")
         collections = await db.db.list_collection_names()
 
-        try:
-            recent_stats = await db.medical_notes.aggregate([
-                {"$match": {"created_at": {"$gte": current_time - timedelta(hours=24)}}},
-                {"$group": {
-                    "_id": "$status",
-                    "count": {"$sum": 1},
-                    "avg_processing_time": {"$avg": "$extraction.metadata.processing_time_ms"}
-                }}
-            ]).to_list(None)
-        except Exception:
-            recent_stats = []
-
         status["services"]["mongodb"] = {
             "status": "healthy",
             "collections": collections,
-            "size_mb": round(db_stats["dataSize"] / (1024 * 1024), 2),
-            "recent_extractions": {
-                "total": sum(stat["count"] for stat in recent_stats),
-                "by_status": {stat["_id"]: stat["count"] for stat in recent_stats},
-                "avg_processing_time": round(
-                    sum(stat.get("avg_processing_time", 0) for stat in recent_stats) /
-                    len(recent_stats) if recent_stats else 0, 2
-                )
-            }
+            "size_mb": round(db_stats["dataSize"] / (1024 * 1024), 2)
         }
     except Exception as e:
         logger.error(f"MongoDB health check failed: {str(e)}")
@@ -125,7 +105,7 @@ async def check_system_health() -> Dict[str, Any]:
 
     return status
 
-# Database Connection Handling & Index Creation
+# Database Connection Handling
 @app.on_event("startup")
 async def startup_db_client():
     """Initialize database connection, perform startup checks, and create indexes"""
@@ -134,28 +114,23 @@ async def startup_db_client():
         await db.client.admin.command('ping')
         logger.info("✅ Connected to MongoDB!")
 
-        # ✅ Fixed: Separate indexes for `icd10_codes` and `cpt_codes`
+        # Create necessary indexes (Fixed Parallel Arrays Issue)
         try:
-            collection = db.medical_notes  # Ensure MongoDB collection is ready
-            
             indexes = [
                 IndexModel([("created_at", DESCENDING)], background=True),
                 IndexModel([("status", ASCENDING)], background=True),
                 IndexModel([("text", TEXT)], background=True),
                 IndexModel([("extraction.note_type", ASCENDING)], background=True),
                 IndexModel([("patient_id", ASCENDING)], background=True),
-                IndexModel([("extraction.icd10_codes.code", ASCENDING)], background=True),  # ✅ Separate index
-                IndexModel([("extraction.cpt_codes.code", ASCENDING)], background=True)  # ✅ Separate index
+                IndexModel([("extraction.icd10_codes.code", ASCENDING)], background=True),
+                IndexModel([("extraction.cpt_codes.code", ASCENDING)], background=True)
             ]
-            
-            await collection.create_indexes(indexes)
-            logger.info("✅ Database indexes created successfully during startup.")
+            await db.medical_notes.create_indexes(indexes)
+            logger.info("✅ Database indexes created successfully!")
         except Exception as e:
-            logger.error(f"❌ Failed to create indexes during startup: {str(e)}")
+            logger.error(f"❌ Failed to create indexes: {str(e)}")
 
-        # ✅ Run health check after all setups
         await check_system_health()
-
     except Exception as e:
         logger.error(f"❌ Failed to connect to MongoDB: {str(e)}")
         raise
@@ -164,11 +139,11 @@ async def startup_db_client():
 async def shutdown_db_client():
     """Clean up connections on shutdown"""
     await db.close_mongodb_connection()
-    logger.info("Disconnected from MongoDB.")
+    logger.info("✅ Disconnected from MongoDB.")
 
 # Root Endpoint
 @app.get("/", tags=["Health"])
-async def root(request: Request):
+async def root():
     return {
         "status": "success",
         "message": "Welcome to Rinova API",
@@ -180,7 +155,7 @@ async def root(request: Request):
 # Enhanced Health Check with Rate Limiting
 @app.get("/health", tags=["Health"])
 @limiter.limit("5/minute")
-async def health_check(request: Request):
+async def health_check():
     return await check_system_health()
 
 # Exception Handlers
@@ -211,6 +186,24 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "error": {
                 "code": exc.status_code,
                 "message": exc.detail,
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            "data": None
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle all other exceptions"""
+    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": {
+                "code": 500,
+                "message": "Internal server error",
+                "detail": str(exc),
                 "timestamp": datetime.utcnow().isoformat()
             },
             "data": None
