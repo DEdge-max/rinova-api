@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
 
+# Base Models
 class Evidence(BaseModel):
     """Model for evidence supporting code selection."""
     direct_quotes: List[str] = Field(
@@ -41,6 +42,7 @@ class AlternativeCode(BaseModel):
         example="Visit complexity suggests potential for higher level code"
     )
 
+# Documentation Gap Models
 class DocumentationGapImpact(BaseModel):
     """Model for documentation gap impact details."""
     affected_codes: List[str] = Field(
@@ -91,6 +93,7 @@ class DocumentationGap(BaseModel):
         description="Recommendations for improvement"
     )
 
+# Extraction Models
 class ExtractionRequest(BaseModel):
     """Request model for code extraction."""
     medical_text: str = Field(
@@ -264,6 +267,7 @@ class ExtractionResponse(BaseModel):
             }
         }
 
+# Enums and Status Models
 class ExtractionStatus(str, Enum):
     """Enumeration of possible extraction statuses."""
     PENDING = "pending"
@@ -271,6 +275,21 @@ class ExtractionStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
+class SortOrder(str, Enum):
+    """Enumeration for sort orders."""
+    ASC = "asc"
+    DESC = "desc"
+
+class NoteType(str, Enum):
+    """Enumeration of note types."""
+    BRIEF = "brief"
+    COMPREHENSIVE = "comprehensive"
+    EMERGENCY = "emergency"
+    OPERATIVE = "operative"
+    PROGRESS = "progress"
+    CONSULTATION = "consultation"
+
+# Medical Note Models
 class MedicalNote(BaseModel):
     """Model for storing medical notes."""
     id: str = Field(..., description="Unique identifier for the note")
@@ -294,6 +313,7 @@ class MedicalNote(BaseModel):
             }
         }
 
+# Search and Analytics Models
 class SearchRequest(BaseModel):
     """Model for search requests."""
     query: Optional[str] = Field(None, description="Text search query")
@@ -336,6 +356,7 @@ class CodeAnalytics(BaseModel):
     common_cpt_codes: List[CommonCode] = Field(..., description="Most common CPT codes")
     timeframe: AnalyticsTimeframe = Field(..., description="Analysis timeframe")
 
+# Pagination and Listing Models
 class PaginationParams(BaseModel):
     """Common pagination parameters."""
     skip: int = Field(0, ge=0, description="Number of records to skip")
@@ -346,22 +367,6 @@ class PaginationParams(BaseModel):
         if v > 100:
             raise ValueError("Maximum limit is 100 records")
         return v
-
-# New Models for Enhanced Listing and Analytics
-
-class SortOrder(str, Enum):
-    """Enumeration for sort orders."""
-    ASC = "asc"
-    DESC = "desc"
-
-class NoteType(str, Enum):
-    """Enumeration of note types."""
-    BRIEF = "brief"
-    COMPREHENSIVE = "comprehensive"
-    EMERGENCY = "emergency"
-    OPERATIVE = "operative"
-    PROGRESS = "progress"
-    CONSULTATION = "consultation"
 
 class NotesFilterParams(BaseModel):
     """Parameters for filtering notes."""
@@ -418,4 +423,36 @@ class NotesSummary(BaseModel):
 class NotesListingResponse(BaseModel):
     """Response model for notes listing."""
     success: bool = Field(..., description="Whether the request was successful")
-    summary
+    summary: NotesSummary = Field(..., description="Summary statistics for the listing")
+    notes: List[MedicalNote] = Field(..., description="List of medical notes")
+    error: Optional[str] = Field(None, description="Error message if any")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "summary": {
+                    "total_notes": 100,
+                    "total_pages": 5,
+                    "current_page": 1,
+                    "notes_per_page": 20,
+                    "has_next": True,
+                    "has_previous": False
+                },
+                "notes": [
+                    {
+                        "id": "note_123",
+                        "content": "Patient presents with...",
+                        "patient_id": "P12345",
+                        "created_at": "2025-02-12T10:00:00Z",
+                        "updated_at": "2025-02-12T10:05:00Z",
+                        "status": "completed",
+                        "metadata": {
+                            "source": "EMR",
+                            "department": "Cardiology"
+                        }
+                    }
+                ],
+                "error": None
+            }
+        }
