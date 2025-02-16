@@ -19,34 +19,99 @@ class OpenAIService:
         Includes timeout and error handling based on config settings.
         """
         system_prompt = """
-        You are a medical coding expert. Extract relevant ICD-10 and CPT codes from the given text.
-        Return the codes in JSON format.
-        
+        You are a medical coding expert. Analyze medical documentation to extract codes, providing clear rationale for each code and identifying documentation improvements needed. Return response as a valid JSON object only. Do not include any explanatory text before or after the JSON object. Do not use markdown formatting or code blocks.
+
         Required format for response:
         {
+            "note_type": "brief|comprehensive|emergency|operative|progress|consultation",
             "icd10_codes": [
                 {
                     "code": "code",
                     "description": "description",
                     "confidence": 0.95,
-                    "primary": true
+                    "primary": true,
+                    "evidence": {
+                        "direct_quotes": ["relevant text from note supporting this code"],
+                        "reasoning": "Detailed explanation of why this code was selected",
+                        "guidelines_applied": ["specific coding guidelines used"]
+                    }
                 }
             ],
             "cpt_codes": [
                 {
                     "code": "code",
                     "description": "description",
-                    "confidence": 0.9,
-                    "category": "category"
+                    "confidence": 0.7,
+                    "evidence": {
+                        "direct_quotes": ["relevant text from note supporting this code"],
+                        "reasoning": "Detailed explanation of why this code was selected",
+                        "guidelines_applied": ["specific coding guidelines used"]
+                    },
+                    "alternative_codes": [
+                        {
+                            "code": "alternative_cpt",
+                            "description": "description",
+                            "required_documentation": "specific missing documentation needed",
+                            "why_considered": "explanation of why this is a potential alternative"
+                        }
+                    ]
+                }
+            ],
+            "documentation_gaps": [
+                {
+                    "severity": "critical|moderate|minor",
+                    "description": "Specific missing or ambiguous element",
+                    "impact": {
+                        "affected_codes": ["codes impacted by this gap"],
+                        "current_limitation": "How this affects current code selection",
+                        "potential_improvement": "What better codes could be used with proper documentation"
+                    },
+                    "recommendation": {
+                        "what_to_add": "Specific guidance on documentation needed",
+                        "example": "Example of proper documentation",
+                        "rationale": "Why this documentation is important"
+                    }
                 }
             ]
         }
-        
+
         Guidelines:
-        1. Always return valid JSON with the word 'json' in the explanation
-        2. Include only documented conditions and procedures
-        3. Set confidence scores based on documentation clarity
-        4. Mark primary diagnoses where clear
+        1. Response must be valid JSON:
+           - No trailing commas
+           - All property names must be in double quotes
+           - No JavaScript comments
+           - No undefined or NaN values
+           - All strings must be in double quotes
+           - Numbers should be plain (no quotes)
+           - Boolean values should be true/false (no quotes)
+
+        2. Always provide clear evidence trail:
+           - Quote specific text that supports each code
+           - Explain reasoning for code selection
+           - Reference specific coding guidelines used
+
+        3. For documentation gaps:
+           - Critical: Missing elements that prevent proper code assignment
+           - Moderate: Elements that could change code selection
+           - Minor: Elements that would strengthen coding but don't change selection
+
+        4. Confidence scoring:
+           - High (0.9-1.0): Complete, unambiguous documentation
+           - Medium (0.7-0.8): Some minor missing elements
+           - Low (0.5-0.6): Significant documentation gaps
+           - Any ambiguity caps confidence at 0.7
+
+        5. Alternative codes:
+           - Only suggest when documentation indicates possible alternatives
+           - Maximum 3 alternatives per code
+           - Must explain what documentation would support each alternative
+
+        6. Length-appropriate analysis:
+           - Brief notes: Focus on documented elements only
+           - Comprehensive notes: Systematic analysis of all sections
+           - Always maintain same level of evidence trail regardless of note length
+
+        IMPORTANT: Return response as a valid JSON object only. Do not include any explanatory text before or after the JSON object. Do not use markdown formatting or code blocks. The response should be a pure JSON object that can be parsed directly.
         """
 
         try:
@@ -93,8 +158,10 @@ class OpenAIService:
 
         # Initialize with empty lists if keys missing
         validated_result = {
+            'note_type': str(result.get('note_type', 'brief')).lower(),
             'icd10_codes': [],
-            'cpt_codes': []
+            'cpt_codes': [],
+            'documentation_gaps': []
         }
 
         # Validate ICD-10 codes
@@ -105,7 +172,12 @@ class OpenAIService:
                         'code': str(code.get('code', '')).strip(),
                         'description': str(code.get('description', '')).strip(),
                         'confidence': max(0.0, min(1.0, float(code.get('confidence', 0.5)))),
-                        'primary': bool(code.get('primary', False))
+                        'primary': bool(code.get('primary', False)),
+                        'evidence': {
+                            'direct_quotes': code.get('evidence', {}).get('direct_quotes', []),
+                            'reasoning': str(code.get('evidence', {}).get('reasoning', '')),
+                            'guidelines_applied': code.get('evidence', {}).get('guidelines_applied', [])
+                        }
                     }
                     if validated_code['code']:  # Only add if code is not empty
                         validated_result['icd10_codes'].append(validated_code)
@@ -121,12 +193,40 @@ class OpenAIService:
                         'code': str(code.get('code', '')).strip(),
                         'description': str(code.get('description', '')).strip(),
                         'confidence': max(0.0, min(1.0, float(code.get('confidence', 0.5)))),
-                        'category': str(code.get('category', 'Unspecified')).strip()
+                        'evidence': {
+                            'direct_quotes': code.get('evidence', {}).get('direct_quotes', []),
+                            'reasoning': str(code.get('evidence', {}).get('reasoning', '')),
+                            'guidelines_applied': code.get('evidence', {}).get('guidelines_applied', [])
+                        },
+                        'alternative_codes': code.get('alternative_codes', [])
                     }
                     if validated_code['code']:  # Only add if code is not empty
                         validated_result['cpt_codes'].append(validated_code)
                 except (ValueError, TypeError) as e:
                     logger.warning(f"Skipping invalid CPT code entry: {e}")
+                    continue
+
+        # Validate documentation gaps
+        if 'documentation_gaps' in result and isinstance(result['documentation_gaps'], list):
+            for gap in result['documentation_gaps']:
+                try:
+                    validated_gap = {
+                        'severity': str(gap.get('severity', 'minor')).lower(),
+                        'description': str(gap.get('description', '')),
+                        'impact': gap.get('impact', {
+                            'affected_codes': [],
+                            'current_limitation': '',
+                            'potential_improvement': ''
+                        }),
+                        'recommendation': gap.get('recommendation', {
+                            'what_to_add': '',
+                            'example': '',
+                            'rationale': ''
+                        })
+                    }
+                    validated_result['documentation_gaps'].append(validated_gap)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Skipping invalid documentation gap entry: {e}")
                     continue
 
         return validated_result
