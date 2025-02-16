@@ -134,26 +134,26 @@ async def startup_db_client():
         await db.client.admin.command('ping')
         logger.info("✅ Connected to MongoDB!")
 
-        # ✅ Step 2: Create necessary indexes
+        # ✅ Fixed: Separate indexes for `icd10_codes` and `cpt_codes`
         try:
-            collection = db.medical_notes  # Ensure MongoDB connection is ready
+            collection = db.medical_notes  # Ensure MongoDB collection is ready
+            
             indexes = [
                 IndexModel([("created_at", DESCENDING)], background=True),
                 IndexModel([("status", ASCENDING)], background=True),
                 IndexModel([("text", TEXT)], background=True),
                 IndexModel([("extraction.note_type", ASCENDING)], background=True),
                 IndexModel([("patient_id", ASCENDING)], background=True),
-                IndexModel([
-                    ("extraction.icd10_codes.code", ASCENDING),
-                    ("extraction.cpt_codes.code", ASCENDING)
-                ], background=True)
+                IndexModel([("extraction.icd10_codes.code", ASCENDING)], background=True),  # ✅ Separate index
+                IndexModel([("extraction.cpt_codes.code", ASCENDING)], background=True)  # ✅ Separate index
             ]
+            
             await collection.create_indexes(indexes)
             logger.info("✅ Database indexes created successfully during startup.")
         except Exception as e:
             logger.error(f"❌ Failed to create indexes during startup: {str(e)}")
 
-        # ✅ Step 3: Run health check after all setups
+        # ✅ Run health check after all setups
         await check_system_health()
 
     except Exception as e:
