@@ -288,7 +288,7 @@ class SortOrder(str, Enum):
 class MedicalNote(BaseModel):
     """Model for storing medical notes."""
     id: str = Field(..., description="Unique identifier for the note")
-    text: str = Field(..., description="The medical note text")  # Changed from content to text
+    text: str = Field(..., description="The medical note text")
     source: str = Field(..., description="Source of the note")
     patient_id: Optional[str] = Field(None, description="Patient identifier")
     created_at: datetime = Field(..., description="Note creation timestamp")
@@ -327,8 +327,9 @@ class MedicalNote(BaseModel):
     def convert_object_id(cls, v):
         if hasattr(v, "$oid"):
             return v["$oid"]
-        return str(v)class SearchRequest(BaseModel):
+        return str(v)
 
+class SearchRequest(BaseModel):
     """Model for search requests."""
     query: Optional[str] = Field(None, description="Text search query")
     start_date: Optional[datetime] = Field(None, description="Start date for filtering")
