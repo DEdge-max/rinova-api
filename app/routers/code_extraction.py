@@ -123,6 +123,7 @@ async def get_notes_listing(
 async def get_dashboard_statistics(
     request: Request,  # Added this parameter for rate limiting
     days: int = Query(30, ge=1, le=365)
+    repo: MedicalNotesRepository = Depends(get_repository)
 ):
     """ Fetch dashboard statistics. """
     try:
