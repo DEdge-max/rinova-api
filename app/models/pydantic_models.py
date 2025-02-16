@@ -100,42 +100,7 @@ class ExtractionRequest(BaseModel):
         description="Medical text to extract codes from",
         example="Patient has type 2 diabetes without complications and hypertension. Office visit level 3 for evaluation."
     )
-class BatchExtractionRequest(BaseModel):
-    """Request model for batch code extraction."""
-    medical_texts: List[str] = Field(
-        ..., 
-        min_items=1,
-        description="List of medical texts to extract codes from",
-        example=["Patient has type 2 diabetes without complications.", 
-                "Patient presents with hypertension."]
-    )
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "medical_texts": [
-                    "Patient has type 2 diabetes without complications and hypertension.",
-                    "Follow-up visit for blood pressure monitoring. BP 140/90."
-                ]
-            }
-        }
 
-class BatchExtractionResponse(BaseModel):
-    """API response model for batch extraction."""
-    success: bool = Field(
-        ..., 
-        description="Whether the batch extraction was successful",
-        example=True
-    )
-    results: List[ExtractionResponse] = Field(
-        ...,
-        description="List of extraction results, one per input text"
-    )
-    error: Optional[str] = Field(
-        None, 
-        description="Error message if any",
-        example=None
-    )
 class ICD10Code(BaseModel):
     """Represents an ICD-10 medical diagnostic code."""
     code: str = Field(
@@ -595,3 +560,42 @@ class DashboardStatistics(BaseModel):
                 }
             }
         }
+
+
+
+class BatchExtractionRequest(BaseModel):
+    """Request model for batch code extraction."""
+    medical_texts: List[str] = Field(
+        ..., 
+        min_items=1,
+        description="List of medical texts to extract codes from",
+        example=["Patient has type 2 diabetes without complications.", 
+                "Patient presents with hypertension."]
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "medical_texts": [
+                    "Patient has type 2 diabetes without complications and hypertension.",
+                    "Follow-up visit for blood pressure monitoring. BP 140/90."
+                ]
+            }
+        }
+
+class BatchExtractionResponse(BaseModel):
+    """API response model for batch extraction."""
+    success: bool = Field(
+        ..., 
+        description="Whether the batch extraction was successful",
+        example=True
+    )
+    results: List[ExtractionResponse] = Field(
+        ...,
+        description="List of extraction results, one per input text"
+    )
+    error: Optional[str] = Field(
+        None, 
+        description="Error message if any",
+        example=None
+    )
