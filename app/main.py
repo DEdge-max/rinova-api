@@ -113,7 +113,7 @@ async def check_system_health() -> Dict[str, Any]:
         status["services"]["openai"] = {"status": "unhealthy", "error": "Missing API key"}
     else:
         try:
-            openai.api_key = openai_api_key
+            client = openai.OpenAI(api_key=openai_api_key)
             models = openai.Model.list()
             status["services"]["openai"] = {"status": "healthy", "models_available": len(models.data)}
         except Exception as e:
