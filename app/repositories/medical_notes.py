@@ -83,7 +83,7 @@ class MedicalNotesRepository:
                     code=r["_id"]["code"],
                     description=r["_id"]["description"],
                     count=r["count"],
-                    percentage=round(r["count"] / max(total_processed, 1) * 100, 2)
+                    percentage=min(100, round(r["count"] / max(total_processed, 1) * 100, 2))
                 ) for r in icd10_results
             ]
 
@@ -106,7 +106,7 @@ class MedicalNotesRepository:
                     code=r["_id"]["code"],
                     description=r["_id"]["description"],
                     count=r["count"],
-                    percentage=round(r["count"] / max(total_processed, 1) * 100, 2)
+                    percentage=min(100, round(r["count"] / max(total_processed, 1) * 100, 2))
                 ) for r in cpt_results
             ]
 
@@ -178,19 +178,4 @@ class MedicalNotesRepository:
             return (total_score / max(len(notes), 1)) * 100
         except Exception as e:
             logger.error(f"Error calculating accuracy: {str(e)}")
-            return 0.0
-
-    async def _calculate_documentation_timeliness(self, notes: List[Dict]) -> float:
-        """Calculate timeliness of documentation processing"""
-        try:
-            total_score = sum(
-                (1.0 if (updated_at - created_at).total_seconds() < 5 else 
-                 0.8 if (updated_at - created_at).total_seconds() < 10 else 
-                 0.6 if (updated_at - created_at).total_seconds() < 30 else 0.4) -
-                max(0, (note.get('extraction_attempts', 1) - 1) * 0.1)
-                for note in notes if (created_at := note.get('created_at')) and (updated_at := note.get('updated_at'))
-            )
-            return (total_score / max(len(notes), 1)) * 100
-        except Exception as e:
-            logger.error(f"Error calculating timeliness: {str(e)}")
             return 0.0
