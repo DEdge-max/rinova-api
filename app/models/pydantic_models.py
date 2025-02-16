@@ -91,7 +91,6 @@ class DocumentationGap(BaseModel):
         description="Recommendations for improvement"
     )
 
-# Updated Existing Models
 class ExtractionRequest(BaseModel):
     """Request model for code extraction."""
     medical_text: str = Field(
@@ -265,13 +264,26 @@ class ExtractionResponse(BaseModel):
             }
         }
 
-# Existing Search and Analytics Models - No Changes Needed
 class ExtractionStatus(str, Enum):
     """Enumeration of possible extraction statuses."""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
+
+class NoteType(str, Enum):
+    """Enumeration of note types."""
+    BRIEF = "brief"
+    COMPREHENSIVE = "comprehensive"
+    EMERGENCY = "emergency"
+    OPERATIVE = "operative"
+    PROGRESS = "progress"
+    CONSULTATION = "consultation"
+
+class SortOrder(str, Enum):
+    """Enumeration for sort orders."""
+    ASC = "asc"
+    DESC = "desc"
 
 class MedicalNote(BaseModel):
     """Model for storing medical notes."""
@@ -348,21 +360,6 @@ class PaginationParams(BaseModel):
         if v > 100:
             raise ValueError("Maximum limit is 100 records")
         return v
-# Add these new models to your existing file:
-
-class SortOrder(str, Enum):
-    """Enumeration for sort orders."""
-    ASC = "asc"
-    DESC = "desc"
-
-class NoteType(str, Enum):
-    """Enumeration of note types."""
-    BRIEF = "brief"
-    COMPREHENSIVE = "comprehensive"
-    EMERGENCY = "emergency"
-    OPERATIVE = "operative"
-    PROGRESS = "progress"
-    CONSULTATION = "consultation"
 
 class StatusBreakdown(BaseModel):
     """Model for status counts breakdown."""
@@ -457,111 +454,42 @@ class NotesListingResponse(BaseModel):
     notes: List[MedicalNote] = Field(..., description="List of medical notes")
     error: Optional[str] = Field(None, description="Error message if any")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "success": True,
-                "summary": {
-                    "total_notes": 100,
-                    "total_pages": 5,
-                    "current_page": 1,
-                    "notes_per_page": 20,
-                    "has_next": True,
-                    "has_previous": False
-                },
-                "notes": [
-                    {
-                        "id": "note_123",
-                        "content": "Patient presents with...",
-                        "patient_id": "P12345",
-                        "created_at": "2025-02-12T10:00:00Z",
-                        "updated_at": "2025-02-12T10:05:00Z",
-                        "status": "completed",
-                        "metadata": {
-                            "source": "EMR",
-                            "department": "Cardiology"
-                        }
-                    }
-                ],
-                "error": None
-            }
-        }
+class CodeFrequency(BaseModel):
+    """Model for code frequency statistics."""
+    code: str = Field(..., description="The medical code")
+    description: str = Field(..., description="Description of the code")
+    count: int = Field(..., description="Number of occurrences")
+    percentage: float = Field(..., ge=0.0, le=100.0, description="Percentage of total codes")
+
+class TimeSeriesPoint(BaseModel):
+    """Model for time series data points."""
+    date: datetime = Field(..., description="Date of the data point")
+    count: int = Field(..., description="Count/value for this date")
+
+class TypeBreakdown(BaseModel):
+    """Model for note type counts breakdown."""
+    type: NoteType = Field(..., description="The note type")
+    count: int = Field(..., description="Number of notes of this type")
+    percentage: float = Field(..., ge=0.0, le=100.0, description="Percentage of total notes")
+
+class DocumentationQuality(BaseModel):
+    """Model for documentation quality metrics."""
+    completeness: float = Field(..., ge=0.0, le=100.0, description="Documentation completeness score")
+    accuracy: float = Field(..., ge=0.0, le=100.0, description="Documentation accuracy score")
+    timeliness: float = Field(..., ge=0.0, le=100.0, description="Documentation timeliness score")
 
 class DashboardStatistics(BaseModel):
     """Model for dashboard statistics."""
-    total_notes: int = Field(
-        ..., 
-        description="Total number of notes in the system"
-    )
-    notes_processed: int = Field(
-        ..., 
-        description="Number of notes that have been processed"
-    )
-    notes_pending: int = Field(
-        ..., 
-        description="Number of notes pending processing"
-    )
-    status_breakdown: StatusBreakdown = Field(
-        default_factory=StatusBreakdown,
-        description="Detailed breakdown of notes by status"
-    )
-    processing_success_rate: float = Field(
-        ..., 
-        ge=0.0, 
-        le=100.0,
-        description="Success rate of note processing as a percentage"
-    )
-    avg_processing_time_ms: float = Field(
-        ..., 
-        description="Average processing time in milliseconds"
-    )
-    total_codes_extracted: int = Field(
-        ..., 
-        description="Total number of codes extracted"
-    )
-    most_common_codes: List[CommonCode] = Field(
-        default_factory=list,
-        max_length=10,
-        description="Top 10 most commonly extracted codes"
-    )
-    recent_activity: Dict[str, int] = Field(
-        default_factory=dict,
-        description="Recent activity counts by date"
-    )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "total_notes": 1000,
-                "notes_processed": 850,
-                "notes_pending": 150,
-                "status_breakdown": {
-                    "pending": 150,
-                    "in_progress": 50,
-                    "completed": 750,
-                    "failed": 50,
-                    "total": 1000
-                },
-                "processing_success_rate": 95.5,
-                "avg_processing_time_ms": 245.3,
-                "total_codes_extracted": 2500,
-                "most_common_codes": [
-                    {
-                        "code": "E11.9",
-                        "count": 150,
-                        "description": "Type 2 diabetes mellitus without complications",
-                        "percentage": 6.0
-                    }
-                ],
-                "recent_activity": {
-                    "2025-02-15": 45,
-                    "2025-02-14": 52,
-                    "2025-02-13": 48
-                }
-            }
-        }
-
-
+    total_notes: int = Field(..., description="Total number of notes in the system")
+    total_processed: int = Field(..., description="Number of notes that have been processed")
+    processing_success_rate: float = Field(..., ge=0.0, le=100.0, description="Success rate of note processing as a percentage")
+    avg_processing_time_ms: float = Field(..., description="Average processing time in milliseconds")
+    status_breakdown: List[StatusBreakdown] = Field(..., description="Detailed breakdown of notes by status")
+    type_breakdown: List[TypeBreakdown] = Field(..., description="Breakdown of notes by type")
+    common_icd10_codes: List[CodeFrequency] = Field(..., description="Most common ICD-10 codes")
+    common_cpt_codes: List[CodeFrequency] = Field(..., description="Most common CPT codes")
+    daily_extraction_counts: List[TimeSeriesPoint] = Field(..., description="Daily extraction counts")
+    documentation_quality: DocumentationQuality = Field(..., description="Documentation quality metrics")
 
 class BatchExtractionRequest(BaseModel):
     """Request model for batch code extraction."""
