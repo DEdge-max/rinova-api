@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from datetime import datetime, timedelta
 import uvicorn
 import openai
@@ -14,11 +15,11 @@ from typing import Dict, Any
 from app.routers import code_extraction
 from app.database.mongodb import db
 
-# ✅ Set up logging
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ✅ Create FastAPI app instance
+# Create FastAPI app instance
 app = FastAPI(
     title="Rinova API",
     description="Medical code extraction API using OpenAI with enhanced analytics & system monitoring",
@@ -27,18 +28,18 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# ✅ Rate Limiting Setup
+# Rate Limiting Setup
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)  # Add this line to properly handle rate limiting
 
-# ✅ Add API Routers
+# Add API Routers (removed prefix as it's already in the router)
 app.include_router(
     code_extraction.router,
-    prefix="/api/v1",
     tags=["Code Extraction"]
 )
 
-# ✅ CORS Configuration (Move origins to `.env` for security)
+# CORS Configuration
 origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
 
 app.add_middleware(
@@ -51,7 +52,7 @@ app.add_middleware(
     max_age=3600,
 )
 
-# ✅ System Health Cache
+# System Health Cache
 system_status_cache = {
     "last_check": None,
     "status": None
@@ -61,7 +62,6 @@ async def check_system_health() -> Dict[str, Any]:
     """Comprehensive system health check with MongoDB & OpenAI monitoring"""
     current_time = datetime.utcnow()
 
-    # ✅ Return Cached Status if less than 5 Minutes Old
     if system_status_cache["last_check"] and current_time - system_status_cache["last_check"] < timedelta(minutes=5):
         return system_status_cache["status"]
 
@@ -72,13 +72,12 @@ async def check_system_health() -> Dict[str, Any]:
         "services": {}
     }
 
-    # ✅ MongoDB Health Check with Exception Handling
+    # MongoDB Health Check
     try:
         await db.client.admin.command('ping')
         db_stats = await db.db.command("dbStats")
         collections = await db.db.list_collection_names()
 
-        # ✅ Aggregate Recent Extractions with Try-Except to Avoid Errors
         try:
             recent_stats = await db.medical_notes.aggregate([
                 {"$match": {"created_at": {"$gte": current_time - timedelta(hours=24)}}},
@@ -105,10 +104,10 @@ async def check_system_health() -> Dict[str, Any]:
             }
         }
     except Exception as e:
-        logger.error(f"❌ MongoDB health check failed: {str(e)}")
+        logger.error(f"MongoDB health check failed: {str(e)}")
         status["services"]["mongodb"] = {"status": "unhealthy", "error": str(e)}
 
-    # ✅ OpenAI API Check
+    # OpenAI API Check
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
         status["services"]["openai"] = {"status": "unhealthy", "error": "Missing API key"}
@@ -118,35 +117,34 @@ async def check_system_health() -> Dict[str, Any]:
             models = openai.Model.list()
             status["services"]["openai"] = {"status": "healthy", "models_available": len(models.data)}
         except Exception as e:
-            logger.error(f"❌ OpenAI API health check failed: {str(e)}")
+            logger.error(f"OpenAI API health check failed: {str(e)}")
             status["services"]["openai"] = {"status": "unhealthy", "error": str(e)}
 
-    # ✅ Update Cache
     system_status_cache["last_check"] = current_time
     system_status_cache["status"] = status
 
     return status
 
-# ✅ Database Connection Handling
+# Database Connection Handling
 @app.on_event("startup")
 async def startup_db_client():
     """Initialize database connection and perform startup checks"""
     try:
         await db.connect_to_mongodb()
         await db.client.admin.command('ping')
-        logger.info("✅ Connected to MongoDB!")
+        logger.info("Connected to MongoDB!")
         await check_system_health()
     except Exception as e:
-        logger.error(f"❌ Failed to connect to MongoDB: {str(e)}")
+        logger.error(f"Failed to connect to MongoDB: {str(e)}")
         raise
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
     """Clean up connections on shutdown"""
     await db.close_mongodb_connection()
-    logger.info("✅ Disconnected from MongoDB.")
+    logger.info("Disconnected from MongoDB.")
 
-# ✅ Root Endpoint
+# Root Endpoint
 @app.get("/", tags=["Health"])
 async def root():
     return {
@@ -157,15 +155,16 @@ async def root():
         "docs": "/docs"
     }
 
-# ✅ Enhanced Health Check with Rate Limiting
+# Enhanced Health Check with Rate Limiting
 @app.get("/health", tags=["Health"])
-@limiter.limit("5/minute")  # ✅ Added Rate Limiting
+@limiter.limit("5/minute")
 async def health_check():
     return await check_system_health()
 
-# ✅ Rate Limit Exception Handler
+# Exception Handlers
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """Handle rate limit exceptions"""
     return JSONResponse(
         status_code=429,
         content={
@@ -173,15 +172,16 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
             "error": {
                 "code": 429,
                 "message": "Too many requests",
+                "detail": str(exc),
                 "timestamp": datetime.utcnow().isoformat()
             },
             "data": None
         }
     )
 
-# ✅ Improved Exception Handling
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTP exceptions"""
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -197,7 +197,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    logger.error(f"❌ Unhandled exception: {str(exc)}", exc_info=True)
+    """Handle all other exceptions"""
+    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={
@@ -205,13 +206,13 @@ async def general_exception_handler(request: Request, exc: Exception):
             "error": {
                 "code": 500,
                 "message": "Internal server error",
+                "detail": str(exc),
                 "timestamp": datetime.utcnow().isoformat()
             },
             "data": None
         }
     )
 
-# ✅ Run Server with Environment Variables
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
