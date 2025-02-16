@@ -3,7 +3,6 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
 
-# Base Models
 class Evidence(BaseModel):
     """Model for evidence supporting code selection."""
     direct_quotes: List[str] = Field(
@@ -42,7 +41,6 @@ class AlternativeCode(BaseModel):
         example="Visit complexity suggests potential for higher level code"
     )
 
-# Documentation Gap Models
 class DocumentationGapImpact(BaseModel):
     """Model for documentation gap impact details."""
     affected_codes: List[str] = Field(
@@ -93,7 +91,7 @@ class DocumentationGap(BaseModel):
         description="Recommendations for improvement"
     )
 
-# Extraction Models
+# Updated Existing Models
 class ExtractionRequest(BaseModel):
     """Request model for code extraction."""
     medical_text: str = Field(
@@ -267,7 +265,7 @@ class ExtractionResponse(BaseModel):
             }
         }
 
-# Enums and Status Models
+# Existing Search and Analytics Models - No Changes Needed
 class ExtractionStatus(str, Enum):
     """Enumeration of possible extraction statuses."""
     PENDING = "pending"
@@ -275,21 +273,6 @@ class ExtractionStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
-class SortOrder(str, Enum):
-    """Enumeration for sort orders."""
-    ASC = "asc"
-    DESC = "desc"
-
-class NoteType(str, Enum):
-    """Enumeration of note types."""
-    BRIEF = "brief"
-    COMPREHENSIVE = "comprehensive"
-    EMERGENCY = "emergency"
-    OPERATIVE = "operative"
-    PROGRESS = "progress"
-    CONSULTATION = "consultation"
-
-# Medical Note Models
 class MedicalNote(BaseModel):
     """Model for storing medical notes."""
     id: str = Field(..., description="Unique identifier for the note")
@@ -313,7 +296,6 @@ class MedicalNote(BaseModel):
             }
         }
 
-# Search and Analytics Models
 class SearchRequest(BaseModel):
     """Model for search requests."""
     query: Optional[str] = Field(None, description="Text search query")
@@ -356,7 +338,6 @@ class CodeAnalytics(BaseModel):
     common_cpt_codes: List[CommonCode] = Field(..., description="Most common CPT codes")
     timeframe: AnalyticsTimeframe = Field(..., description="Analysis timeframe")
 
-# Pagination and Listing Models
 class PaginationParams(BaseModel):
     """Common pagination parameters."""
     skip: int = Field(0, ge=0, description="Number of records to skip")
@@ -367,6 +348,55 @@ class PaginationParams(BaseModel):
         if v > 100:
             raise ValueError("Maximum limit is 100 records")
         return v
+# Add these new models to your existing file:
+
+class SortOrder(str, Enum):
+    """Enumeration for sort orders."""
+    ASC = "asc"
+    DESC = "desc"
+
+class NoteType(str, Enum):
+    """Enumeration of note types."""
+    BRIEF = "brief"
+    COMPREHENSIVE = "comprehensive"
+    EMERGENCY = "emergency"
+    OPERATIVE = "operative"
+    PROGRESS = "progress"
+    CONSULTATION = "consultation"
+
+class StatusBreakdown(BaseModel):
+    """Model for status counts breakdown."""
+    pending: int = Field(
+        default=0,
+        description="Number of notes in pending status"
+    )
+    in_progress: int = Field(
+        default=0,
+        description="Number of notes in progress"
+    )
+    completed: int = Field(
+        default=0,
+        description="Number of completed notes"
+    )
+    failed: int = Field(
+        default=0,
+        description="Number of failed notes"
+    )
+    total: int = Field(
+        default=0,
+        description="Total number of notes"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "pending": 50,
+                "in_progress": 25,
+                "completed": 400,
+                "failed": 10,
+                "total": 485
+            }
+        }
 
 class NotesFilterParams(BaseModel):
     """Parameters for filtering notes."""
@@ -456,11 +486,25 @@ class NotesListingResponse(BaseModel):
                 "error": None
             }
         }
+
 class DashboardStatistics(BaseModel):
     """Model for dashboard statistics."""
-    total_notes: int = Field(..., description="Total number of notes in the system")
-    notes_processed: int = Field(..., description="Number of notes that have been processed")
-    notes_pending: int = Field(..., description="Number of notes pending processing")
+    total_notes: int = Field(
+        ..., 
+        description="Total number of notes in the system"
+    )
+    notes_processed: int = Field(
+        ..., 
+        description="Number of notes that have been processed"
+    )
+    notes_pending: int = Field(
+        ..., 
+        description="Number of notes pending processing"
+    )
+    status_breakdown: StatusBreakdown = Field(
+        default_factory=StatusBreakdown,
+        description="Detailed breakdown of notes by status"
+    )
     processing_success_rate: float = Field(
         ..., 
         ge=0.0, 
@@ -491,6 +535,13 @@ class DashboardStatistics(BaseModel):
                 "total_notes": 1000,
                 "notes_processed": 850,
                 "notes_pending": 150,
+                "status_breakdown": {
+                    "pending": 150,
+                    "in_progress": 50,
+                    "completed": 750,
+                    "failed": 50,
+                    "total": 1000
+                },
                 "processing_success_rate": 95.5,
                 "avg_processing_time_ms": 245.3,
                 "total_codes_extracted": 2500,
