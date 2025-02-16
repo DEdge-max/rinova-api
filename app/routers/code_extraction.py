@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from fastapi.middleware.limiter import LimiterMiddleware
+from slowapi.middleware import LimiterMiddleware 
 from pydantic import BaseModel
 from ..services.openai_service import OpenAIService
 from ..dependencies.database import get_repository
