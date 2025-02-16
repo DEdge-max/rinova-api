@@ -35,7 +35,6 @@ def get_openai_service():
 def get_repository():
     return MedicalNotesRepository()
 
-# Router setup - removed exception handlers
 router = APIRouter(
     prefix="/api/v1",
     tags=["Code Extraction"]
@@ -44,24 +43,25 @@ router = APIRouter(
 @router.post("/extract", response_model=ExtractionResponse, status_code=201)
 @limiter.limit("10/minute")
 async def extract_codes(
-    request: ExtractionRequest,
+    request: Request,  # Added this parameter for rate limiting
+    extraction_request: ExtractionRequest,
     openai_service: OpenAIService = Depends(get_openai_service),
     repo: MedicalNotesRepository = Depends(get_repository)
 ) -> ExtractionResponse:
     """ Extract medical codes from clinical text and store them in MongoDB. """
-    logger.info(f"Processing extraction request with {len(request.medical_text)} characters")
+    logger.info(f"Processing extraction request with {len(extraction_request.medical_text)} characters")
     start_time = time.time()
     
     try:
-        note_id = await repo.create_note(request.medical_text)
-        extracted_data = await openai_service.extract_medical_codes(request.medical_text)
+        note_id = await repo.create_note(extraction_request.medical_text)
+        extracted_data = await openai_service.extract_medical_codes(extraction_request.medical_text)
         processing_time = int((time.time() - start_time) * 1000)
         
         metadata = Metadata(
             model_version="1.0",
             processing_time_ms=processing_time,
             timestamp=datetime.utcnow().isoformat(),
-            note_length=len(request.medical_text)
+            note_length=len(extraction_request.medical_text)
         )
         
         data = ExtractionData(
@@ -82,19 +82,28 @@ async def extract_codes(
 @router.post("/extract/batch", response_model=List[ExtractionResponse], status_code=201)
 @limiter.limit("5/minute")
 async def batch_extract_codes(
-    requests: BatchExtractionRequest,
+    request: Request,  # Added this parameter for rate limiting
+    batch_request: BatchExtractionRequest,
     openai_service: OpenAIService = Depends(get_openai_service),
     repo: MedicalNotesRepository = Depends(get_repository)
 ):
     """ Process multiple medical texts in one request asynchronously. """
-    logger.info(f"Processing batch extraction with {len(requests.texts)} texts")
-    tasks = [extract_codes(ExtractionRequest(medical_text=text), openai_service, repo) for text in requests.texts]
+    logger.info(f"Processing batch extraction with {len(batch_request.texts)} texts")
+    tasks = [
+        extract_codes(
+            request,  # Pass the request parameter
+            ExtractionRequest(medical_text=text),
+            openai_service,
+            repo
+        ) for text in batch_request.texts
+    ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
 
 @router.get("/notes", response_model=NotesListingResponse)
 @limiter.limit("20/minute")
 async def get_notes_listing(
+    request: Request,  # Added this parameter for rate limiting
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     repo: MedicalNotesRepository = Depends(get_repository)
@@ -112,6 +121,7 @@ async def get_notes_listing(
 @router.get("/notes/dashboard", response_model=Dict[str, Any])
 @limiter.limit("5/minute")
 async def get_dashboard_statistics(
+    request: Request,  # Added this parameter for rate limiting
     days: int = Query(30, ge=1, le=365)
 ):
     """ Fetch dashboard statistics. """
@@ -124,6 +134,7 @@ async def get_dashboard_statistics(
 @router.get("/search", response_model=List[Dict])
 @limiter.limit("15/minute")
 async def search_notes(
+    request: Request,  # Added this parameter for rate limiting
     query: str = Query(..., min_length=1),
     limit: int = Query(10, ge=1, le=50)
 ):
@@ -136,6 +147,7 @@ async def search_notes(
 @router.get("/notes/type/{note_type}", response_model=List[Dict])
 @limiter.limit("10/minute")
 async def get_notes_by_type(
+    request: Request,  # Added this parameter for rate limiting
     note_type: NoteType,
     limit: int = Query(10, ge=1, le=50)
 ):
