@@ -46,20 +46,58 @@ class MedicalNotesRepository:
         try:
             query = self._build_filter_query(filters)
             skip = (page - 1) * page_size
-
+            logger.info(f"Executing query: {query}")
+            
             # Determine sort direction
             sort_direction = DESCENDING if sort_order == SortOrder.DESC else ASCENDING
-
             cursor = db.medical_notes.find(query)\
                 .sort(sort_by, sort_direction)\
                 .skip(skip)\
                 .limit(page_size)
-
+            
             notes = []
             async for note in cursor:
-                # Convert ObjectId to string
-                note["id"] = str(note.pop("_id"))
-                notes.append(MedicalNote(**note))
+                try:
+                    # Convert ObjectId to string
+                    if "_id" in note:
+                        note["id"] = str(note["_id"])
+                        del note["_id"]
+
+                    # Handle MongoDB date format
+                    for date_field in ["created_at", "updated_at", "last_extraction_attempt"]:
+                        if date_field in note and isinstance(note[date_field], dict) and "$date" in note[date_field]:
+                            note[date_field] = datetime.fromtimestamp(
+                                int(note[date_field]["$date"]["$numberLong"]) / 1000
+                            )
+
+                    # Handle MongoDB number format
+                    for number_field in ["length", "extraction_attempts"]:
+                        if number_field in note and isinstance(note[number_field], dict) and "$numberInt" in note[number_field]:
+                            note[number_field] = int(note[number_field]["$numberInt"])
+
+                    # Handle nested number formats in extraction
+                    if "extraction" in note and "metadata" in note["extraction"]:
+                        if isinstance(note["extraction"]["metadata"].get("processing_time_ms"), dict):
+                            note["extraction"]["metadata"]["processing_time_ms"] = int(
+                                note["extraction"]["metadata"]["processing_time_ms"].get("$numberInt", 0)
+                            )
+                        if isinstance(note["extraction"]["metadata"].get("note_length"), dict):
+                            note["extraction"]["metadata"]["note_length"] = int(
+                                note["extraction"]["metadata"]["note_length"].get("$numberInt", 0)
+                            )
+
+                    # Handle confidence values in codes
+                    if "extraction" in note:
+                        for code_list in ["icd10_codes", "cpt_codes"]:
+                            for code in note["extraction"].get(code_list, []):
+                                if isinstance(code.get("confidence"), dict):
+                                    code["confidence"] = float(code["confidence"].get("$numberDouble", 0))
+
+                    notes.append(MedicalNote(**note))
+                except Exception as e:
+                    logger.error(f"Error processing note: {str(e)}")
+                    logger.error(f"Problematic note: {note}")
+                    continue
 
             return notes
 
@@ -69,27 +107,30 @@ class MedicalNotesRepository:
 
     def _build_filter_query(self, filters: NotesFilterParams) -> Dict:
         """Build MongoDB query from filter parameters"""
-        query = {}
-
-        if filters.note_type:
-            query["extraction.note_type"] = filters.note_type
-
-        if filters.status:
-            query["status"] = filters.status
-
-        if filters.search_text:
-            query["$text"] = {"$search": filters.search_text}
-
-        if filters.start_date:
-            query["created_at"] = {"$gte": filters.start_date}
-
-        if filters.end_date:
-            query.setdefault("created_at", {})["$lte"] = filters.end_date
-
-        if filters.has_documentation_gaps:
-            query["extraction.documentation_gaps"] = {"$exists": True, "$ne": []}
-
-        return query
+        query = {}  # Start with empty query to get all documents if no filters
+        try:
+            if filters:
+                if filters.note_type:
+                    query["extraction.note_type"] = filters.note_type.value
+                if filters.status:
+                    query["status"] = filters.status.value
+                if filters.search_text:
+                    query["$text"] = {"$search": filters.search_text}
+                if filters.start_date:
+                    query["created_at"] = {"$gte": {
+                        "$date": {"$numberLong": str(int(filters.start_date.timestamp() * 1000))}
+                    }}
+                if filters.end_date:
+                    query.setdefault("created_at", {})["$lte"] = {
+                        "$date": {"$numberLong": str(int(filters.end_date.timestamp() * 1000))}
+                    }
+                if filters.has_documentation_gaps:
+                    query["extraction.documentation_gaps"] = {"$exists": True, "$ne": []}
+            logger.info(f"Built MongoDB query: {query}")
+            return query
+        except Exception as e:
+            logger.error(f"Error building query: {str(e)}")
+            return {}  # Return empty query in case of errors
 
     async def get_dashboard_statistics(self, days: int = 30) -> DashboardStatistics:
         """Get comprehensive dashboard statistics"""
