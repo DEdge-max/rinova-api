@@ -155,9 +155,8 @@ async def root():
 # Enhanced Health Check with Rate Limiting
 @app.get("/health", tags=["Health"])
 @limiter.limit("5/minute")
-async def health_check():
+async def health_check(request: Request):
     return await check_system_health()
-
 # Exception Handlers
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
