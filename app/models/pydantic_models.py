@@ -288,27 +288,47 @@ class SortOrder(str, Enum):
 class MedicalNote(BaseModel):
     """Model for storing medical notes."""
     id: str = Field(..., description="Unique identifier for the note")
-    content: str = Field(..., description="The medical note text")
+    text: str = Field(..., description="The medical note text")  # Changed from content to text
+    source: str = Field(..., description="Source of the note")
     patient_id: Optional[str] = Field(None, description="Patient identifier")
     created_at: datetime = Field(..., description="Note creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
-    status: ExtractionStatus = Field(..., description="Current extraction status")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    length: int = Field(..., description="Length of the note")
+    status: str = Field(..., description="Current extraction status")
+    extraction_attempts: int = Field(..., description="Number of extraction attempts")
+    last_extraction_attempt: datetime = Field(..., description="Timestamp of last extraction attempt")
+    extraction: Dict[str, Any] = Field(..., description="Extraction results")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "id": "note_123",
-                "content": "Patient presents with...",
+                "text": "Patient presents with...",
+                "source": "API",
                 "patient_id": "P12345",
                 "created_at": "2025-02-12T10:00:00Z",
                 "updated_at": "2025-02-12T10:05:00Z",
+                "length": 659,
                 "status": "completed",
-                "metadata": {"source": "EMR", "department": "Cardiology"}
+                "extraction_attempts": 1,
+                "last_extraction_attempt": "2025-02-12T10:05:00Z",
+                "extraction": {
+                    "note_type": "emergency",
+                    "icd10_codes": [],
+                    "cpt_codes": [],
+                    "documentation_gaps": []
+                }
             }
         }
+        allow_population_by_field_name = True
+        populate_by_name = True
 
-class SearchRequest(BaseModel):
+    @validator('id', pre=True)
+    def convert_object_id(cls, v):
+        if hasattr(v, "$oid"):
+            return v["$oid"]
+        return str(v)class SearchRequest(BaseModel):
+
     """Model for search requests."""
     query: Optional[str] = Field(None, description="Text search query")
     start_date: Optional[datetime] = Field(None, description="Start date for filtering")
