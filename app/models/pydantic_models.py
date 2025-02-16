@@ -456,3 +456,56 @@ class NotesListingResponse(BaseModel):
                 "error": None
             }
         }
+class DashboardStatistics(BaseModel):
+    """Model for dashboard statistics."""
+    total_notes: int = Field(..., description="Total number of notes in the system")
+    notes_processed: int = Field(..., description="Number of notes that have been processed")
+    notes_pending: int = Field(..., description="Number of notes pending processing")
+    processing_success_rate: float = Field(
+        ..., 
+        ge=0.0, 
+        le=100.0,
+        description="Success rate of note processing as a percentage"
+    )
+    avg_processing_time_ms: float = Field(
+        ..., 
+        description="Average processing time in milliseconds"
+    )
+    total_codes_extracted: int = Field(
+        ..., 
+        description="Total number of codes extracted"
+    )
+    most_common_codes: List[CommonCode] = Field(
+        default_factory=list,
+        max_length=10,
+        description="Top 10 most commonly extracted codes"
+    )
+    recent_activity: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Recent activity counts by date"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total_notes": 1000,
+                "notes_processed": 850,
+                "notes_pending": 150,
+                "processing_success_rate": 95.5,
+                "avg_processing_time_ms": 245.3,
+                "total_codes_extracted": 2500,
+                "most_common_codes": [
+                    {
+                        "code": "E11.9",
+                        "count": 150,
+                        "description": "Type 2 diabetes mellitus without complications",
+                        "percentage": 6.0
+                    }
+                ],
+                "recent_activity": {
+                    "2025-02-15": 45,
+                    "2025-02-14": 52,
+                    "2025-02-13": 48
+                }
+            }
+        }
