@@ -2,11 +2,12 @@ import logging
 import time
 import asyncio
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from math import ceil
 
 from ..services.openai_service import OpenAIService
 from ..repositories.medical_notes import MedicalNotesRepository
@@ -17,7 +18,11 @@ from ..models.pydantic_models import (
     Metadata,
     NotesListingParams,
     NotesListingResponse,
+    NotesSummary,
+    NotesFilterParams,
     NoteType,
+    SortOrder,
+    ExtractionStatus,
     BatchExtractionRequest
 )
 
@@ -43,7 +48,7 @@ router = APIRouter(
 @router.post("/extract", response_model=ExtractionResponse, status_code=201)
 @limiter.limit("10/minute")
 async def extract_codes(
-    request: Request,  # Added this parameter for rate limiting
+    request: Request,
     extraction_request: ExtractionRequest,
     openai_service: OpenAIService = Depends(get_openai_service),
     repo: MedicalNotesRepository = Depends(get_repository)
@@ -82,81 +87,86 @@ async def extract_codes(
 @router.post("/extract/batch", response_model=List[ExtractionResponse], status_code=201)
 @limiter.limit("5/minute")
 async def batch_extract_codes(
-    request: Request,  # Added this parameter for rate limiting
+    request: Request,
     batch_request: BatchExtractionRequest,
     openai_service: OpenAIService = Depends(get_openai_service),
     repo: MedicalNotesRepository = Depends(get_repository)
 ):
     """ Process multiple medical texts in one request asynchronously. """
-    logger.info(f"Processing batch extraction with {len(batch_request.texts)} texts")
+    logger.info(f"Processing batch extraction with {len(batch_request.medical_texts)} texts")
     tasks = [
         extract_codes(
-            request,  # Pass the request parameter
+            request,
             ExtractionRequest(medical_text=text),
             openai_service,
             repo
-        ) for text in batch_request.texts
+        ) for text in batch_request.medical_texts
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
 
 @router.get("/notes", response_model=NotesListingResponse)
 @limiter.limit("20/minute")
-async def get_notes_listing(
-    request: Request,  # Added this parameter for rate limiting
+async def list_notes(
+    request: Request,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    sort_by: str = "created_at",
+    sort_order: SortOrder = SortOrder.DESC,
+    note_type: Optional[NoteType] = None,
+    status: Optional[ExtractionStatus] = None,
+    search_text: Optional[str] = None,
     repo: MedicalNotesRepository = Depends(get_repository)
-):
-    """ Get paginated listing of medical notes. """
+) -> NotesListingResponse:
+    """Get paginated list of medical notes with filtering options"""
     try:
-        params = NotesListingParams(page=page, page_size=page_size)
-        notes, summary = await repo.get_notes_listing(params)
-        return NotesListingResponse(success=True, summary=summary, notes=notes, error=None)
+        filters = NotesFilterParams(
+            note_type=note_type,
+            status=status,
+            search_text=search_text
+        )
         
+        total_notes = await repo.get_notes_count(filters)
+        total_pages = ceil(total_notes / page_size)
+        
+        notes = await repo.get_paginated_notes(
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            filters=filters
+        )
+        
+        summary = NotesSummary(
+            total_notes=total_notes,
+            total_pages=total_pages,
+            current_page=page,
+            notes_per_page=page_size,
+            has_next=page < total_pages,
+            has_previous=page > 1
+        )
+        
+        return NotesListingResponse(
+            success=True,
+            summary=summary,
+            notes=notes,
+            error=None
+        )
     except Exception as e:
-        logger.error(f"Error getting notes listing: {str(e)}", exc_info=True)
-        return NotesListingResponse(success=False, summary=None, notes=[], error=str(e))
-
-@router.get("/notes/dashboard", response_model=Dict[str, Any])
-@limiter.limit("5/minute")
-async def get_dashboard_statistics(
-    request: Request,  # Added this parameter for rate limiting
-    days: int = Query(30, ge=1, le=365),  
-    repo: MedicalNotesRepository = Depends(get_repository)  
-):
-    """ Fetch dashboard statistics. """
-    try:
-        stats = await repo.get_dashboard_statistics(days)
-        return {"success": True, "data": stats, "error": None}
-    except Exception as e:
-        return {"success": False, "data": None, "error": str(e)}
-
-@router.get("/search", response_model=List[Dict])
-@limiter.limit("15/minute")
-async def search_notes(
-    request: Request,  # Added this parameter for rate limiting
-    query: str = Query(..., min_length=1),
-    limit: int = Query(10, ge=1, le=50)
-):
-    """ Search notes using text search. """
-    try:
-        return await repo.search_notes(query, limit)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/notes/type/{note_type}", response_model=List[Dict])
-@limiter.limit("10/minute")
-async def get_notes_by_type(
-    request: Request,  # Added this parameter for rate limiting
-    note_type: NoteType,
-    limit: int = Query(10, ge=1, le=50)
-):
-    """ Get notes of a specific type. """
-    try:
-        return await repo.get_notes_by_type(note_type.value, limit)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error listing notes: {str(e)}")
+        return NotesListingResponse(
+            success=False,
+            summary=NotesSummary(
+                total_notes=0,
+                total_pages=0,
+                current_page=page,
+                notes_per_page=page_size,
+                has_next=False,
+                has_previous=False
+            ),
+            notes=[],
+            error=str(e)
+        )
 
 @router.get("/health")
 async def health_check():
