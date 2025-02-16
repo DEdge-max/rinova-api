@@ -1,11 +1,10 @@
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Tuple
+from typing import List, Dict
 from bson import ObjectId
 from ..database.mongodb import db
 import logging
+from pymongo import IndexModel, ASCENDING, DESCENDING, TEXT
 from ..models.pydantic_models import (
-    NotesFilterParams,
-    NotesListingParams,
     NotesSummary,
     DashboardStatistics,
     StatusBreakdown,
@@ -20,146 +19,90 @@ logger = logging.getLogger(__name__)
 
 class MedicalNotesRepository:
     def __init__(self):
-        """Initialize repository without ensure_indexes (Handled in main.py)"""
-        pass  # Indexes are now created in startup_db_client in main.py
+        """Initialize repository"""
+        pass
 
     async def get_dashboard_statistics(self, days: int = 30) -> DashboardStatistics:
         """Get comprehensive dashboard statistics"""
         try:
             start_date = datetime.utcnow() - timedelta(days=days)
             
-            # Get basic counts
             total_notes = await db.medical_notes.count_documents({})
             total_processed = await db.medical_notes.count_documents({
                 "status": ExtractionStatus.COMPLETED.value
             })
             
-            # Calculate status breakdown
-            status_breakdown = []
-            for status in ExtractionStatus:
-                count = await db.medical_notes.count_documents({"status": status.value})
-                percentage = (count / total_notes * 100) if total_notes > 0 else 0
-                status_breakdown.append(StatusBreakdown(
+            status_breakdown = [
+                StatusBreakdown(
                     status=status,
-                    count=count,
-                    percentage=round(percentage, 2)
-                ))
+                    count=await db.medical_notes.count_documents({"status": status.value}),
+                    percentage=round((await db.medical_notes.count_documents({"status": status.value}) / max(total_notes, 1)) * 100, 2)
+                ) for status in ExtractionStatus
+            ]
             
-            # Calculate type breakdown
-            type_breakdown = []
-            for note_type in NoteType:
-                count = await db.medical_notes.count_documents({
-                    "extraction.note_type": note_type.value
-                })
-                percentage = (count / total_notes * 100) if total_notes > 0 else 0
-                type_breakdown.append(TypeBreakdown(
+            type_breakdown = [
+                TypeBreakdown(
                     type=note_type,
-                    count=count,
-                    percentage=round(percentage, 2)
-                ))
-            
-            # Get processing statistics
-            processing_pipeline = [
-                {"$match": {"status": ExtractionStatus.COMPLETED.value}},
-                {"$group": {
-                    "_id": None,
-                    "avg_time": {"$avg": "$extraction.metadata.processing_time_ms"}
-                }}
-            ]
-            processing_stats = await db.medical_notes.aggregate(processing_pipeline).to_list(1)
-            avg_processing_time = processing_stats[0]["avg_time"] if processing_stats else 0
-            
-            # Get common codes
-            icd10_pipeline = [
-                {"$unwind": "$extraction.icd10_codes"},
-                {"$group": {
-                    "_id": {
-                        "code": "$extraction.icd10_codes.code",
-                        "description": "$extraction.icd10_codes.description"
-                    },
-                    "count": {"$sum": 1}
-                }},
-                {"$sort": {"count": -1}},
-                {"$limit": 10}
+                    count=await db.medical_notes.count_documents({"extraction.note_type": note_type.value}),
+                    percentage=round((await db.medical_notes.count_documents({"extraction.note_type": note_type.value}) / max(total_notes, 1)) * 100, 2)
+                ) for note_type in NoteType
             ]
             
-            cpt_pipeline = [
-                {"$unwind": "$extraction.cpt_codes"},
-                {"$group": {
-                    "_id": {
-                        "code": "$extraction.cpt_codes.code",
-                        "description": "$extraction.cpt_codes.description"
-                    },
-                    "count": {"$sum": 1}
-                }},
-                {"$sort": {"count": -1}},
-                {"$limit": 10}
-            ]
+            processed_notes = await db.medical_notes.find({
+                "status": ExtractionStatus.COMPLETED.value
+            }).to_list(None)
             
-            icd10_results = await db.medical_notes.aggregate(icd10_pipeline).to_list(10)
-            cpt_results = await db.medical_notes.aggregate(cpt_pipeline).to_list(10)
-            
-            # Calculate total occurrences of codes
-            total_icd10_occurrences = sum(r["count"] for r in icd10_results)
-            total_cpt_occurrences = sum(r["count"] for r in cpt_results)
-
-            # Format code frequencies with capped percentages
-            common_icd10_codes = [
-                CodeFrequency(
-                    code=r["_id"]["code"],
-                    description=r["_id"]["description"],
-                    count=r["count"],
-                    percentage=min(100, round(r["count"] / max(total_icd10_occurrences, 1) * 100, 2))
-                ) for r in icd10_results
-            ]
-
-            common_cpt_codes = [
-                CodeFrequency(
-                    code=r["_id"]["code"],
-                    description=r["_id"]["description"],
-                    count=r["count"],
-                    percentage=min(100, round(r["count"] / max(total_cpt_occurrences, 1) * 100, 2))
-                ) for r in cpt_results
-            ]
-            
-            # Calculate daily extraction counts
-            daily_pipeline = [
-                {"$match": {"created_at": {"$gte": start_date}}},
-                {"$group": {
-                    "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}},
-                    "count": {"$sum": 1}
-                }},
-                {"$sort": {"_id": 1}}
-            ]
-            daily_counts = await db.medical_notes.aggregate(daily_pipeline).to_list(None)
-
-            # Format time series data
-            daily_extraction_counts = [
-                TimeSeriesPoint(
-                    date=datetime.strptime(d["_id"], "%Y-%m-%d"),
-                    count=d["count"]
-                ) for d in daily_counts
-            ]
-            
-            # Calculate documentation quality metrics
             documentation_quality = {
-                "completeness": await self._calculate_documentation_completeness(),
-                "accuracy": await self._calculate_documentation_accuracy(),
-                "timeliness": await self._calculate_documentation_timeliness()
+                "completeness": await self._calculate_documentation_completeness(processed_notes),
+                "accuracy": await self._calculate_documentation_accuracy(processed_notes),
+                "timeliness": await self._calculate_documentation_timeliness(processed_notes)
             }
             
             return DashboardStatistics(
                 total_notes=total_notes,
                 total_processed=total_processed,
-                processing_success_rate=round(total_processed / total_notes * 100, 2) if total_notes > 0 else 0,
-                avg_processing_time_ms=round(avg_processing_time, 2),
+                processing_success_rate=round(total_processed / max(total_notes, 1) * 100, 2),
                 status_breakdown=status_breakdown,
                 type_breakdown=type_breakdown,
-                common_icd10_codes=common_icd10_codes,
-                common_cpt_codes=common_cpt_codes,
-                daily_extraction_counts=daily_extraction_counts,
                 documentation_quality=documentation_quality
             )
         except Exception as e:
-            logger.error(f"❌ Failed to get dashboard statistics: {str(e)}")
+            logger.error(f"Failed to get dashboard statistics: {str(e)}")
             raise
+
+    async def _calculate_documentation_completeness(self, notes: List[Dict]) -> float:
+        try:
+            total_score = sum(
+                0.4 * (not note.get('extraction', {}).get('documentation_gaps', [])) +
+                0.3 * sum(code.get('confidence', 0) for code in note.get('extraction', {}).get('icd10_codes', []) + note.get('extraction', {}).get('cpt_codes', [])) / max(len(note.get('extraction', {}).get('icd10_codes', []) + note.get('extraction', {}).get('cpt_codes', [])), 1) +
+                0.3 * any(code.get('evidence', {}).get('direct_quotes', []) for code in note.get('extraction', {}).get('icd10_codes', []) + note.get('extraction', {}).get('cpt_codes', []))
+                for note in notes
+            )
+            return (total_score / max(len(notes), 1)) * 100
+        except Exception as e:
+            logger.error(f"Error calculating documentation completeness: {str(e)}")
+            return 0.0
+
+    async def _calculate_documentation_accuracy(self, notes: List[Dict]) -> float:
+        try:
+            total_score = sum(
+                0.7 * (sum(code.get('confidence', 0) for code in note.get('extraction', {}).get('icd10_codes', []) + note.get('extraction', {}).get('cpt_codes', [])) / max(len(note.get('extraction', {}).get('icd10_codes', []) + note.get('extraction', {}).get('cpt_codes', [])), 1)) +
+                0.3 * all(len(code.get('evidence', {}).get('direct_quotes', [])) > 0 for code in note.get('extraction', {}).get('icd10_codes', []) + note.get('extraction', {}).get('cpt_codes', []))
+                for note in notes
+            )
+            return (total_score / max(len(notes), 1)) * 100
+        except Exception as e:
+            logger.error(f"Error calculating accuracy: {str(e)}")
+            return 0.0
+
+    async def _calculate_documentation_timeliness(self, notes: List[Dict]) -> float:
+        try:
+            total_score = sum(
+                (1.0 if (updated_at - created_at).total_seconds() < 5 else 0.8 if (updated_at - created_at).total_seconds() < 10 else 0.6 if (updated_at - created_at).total_seconds() < 30 else 0.4) -
+                max(0, (note.get('extraction_attempts', 1) - 1) * 0.1)
+                for note in notes if (created_at := note.get('created_at')) and (updated_at := note.get('updated_at'))
+            )
+            return (total_score / max(len(notes), 1)) * 100
+        except Exception as e:
+            logger.error(f"Error calculating timeliness: {str(e)}")
+            return 0.0
