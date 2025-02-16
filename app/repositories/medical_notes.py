@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
-from typing import List, Dict
+from typing import List, Dict, Optional
 from bson import ObjectId
 from ..database.mongodb import db
 import logging
-from pymongo import IndexModel, ASCENDING, DESCENDING, TEXT
+from pymongo import ASCENDING, DESCENDING
 from ..models.pydantic_models import (
     DashboardStatistics,
     StatusBreakdown,
@@ -11,15 +11,85 @@ from ..models.pydantic_models import (
     CodeFrequency,
     TimeSeriesPoint,
     ExtractionStatus,
-    NoteType
+    NoteType,
+    NotesFilterParams,
+    NotesListingParams,
+    NotesSummary,
+    NotesListingResponse,
+    MedicalNote,
+    SortOrder
 )
 
 logger = logging.getLogger(__name__)
 
 class MedicalNotesRepository:
-    def __init__(self):
-        """Initialize repository"""
-        pass
+    """Repository for managing medical notes in MongoDB."""
+
+    async def get_notes_count(self, filters: NotesFilterParams) -> int:
+        """Get total count of notes matching filters"""
+        try:
+            query = self._build_filter_query(filters)
+            return await db.medical_notes.count_documents(query)
+        except Exception as e:
+            logger.error(f"Error getting notes count: {str(e)}")
+            raise
+
+    async def get_paginated_notes(
+        self,
+        page: int,
+        page_size: int,
+        sort_by: str,
+        sort_order: SortOrder,
+        filters: NotesFilterParams
+    ) -> List[MedicalNote]:
+        """Get paginated and filtered notes"""
+        try:
+            query = self._build_filter_query(filters)
+            skip = (page - 1) * page_size
+
+            # Determine sort direction
+            sort_direction = DESCENDING if sort_order == SortOrder.DESC else ASCENDING
+
+            cursor = db.medical_notes.find(query)\
+                .sort(sort_by, sort_direction)\
+                .skip(skip)\
+                .limit(page_size)
+
+            notes = []
+            async for note in cursor:
+                # Convert ObjectId to string
+                note["id"] = str(note.pop("_id"))
+                notes.append(MedicalNote(**note))
+
+            return notes
+
+        except Exception as e:
+            logger.error(f"Error getting paginated notes: {str(e)}")
+            raise
+
+    def _build_filter_query(self, filters: NotesFilterParams) -> Dict:
+        """Build MongoDB query from filter parameters"""
+        query = {}
+
+        if filters.note_type:
+            query["extraction.note_type"] = filters.note_type
+
+        if filters.status:
+            query["status"] = filters.status
+
+        if filters.search_text:
+            query["$text"] = {"$search": filters.search_text}
+
+        if filters.start_date:
+            query["created_at"] = {"$gte": filters.start_date}
+
+        if filters.end_date:
+            query.setdefault("created_at", {})["$lte"] = filters.end_date
+
+        if filters.has_documentation_gaps:
+            query["extraction.documentation_gaps"] = {"$exists": True, "$ne": []}
+
+        return query
 
     async def get_dashboard_statistics(self, days: int = 30) -> DashboardStatistics:
         """Get comprehensive dashboard statistics"""
@@ -63,66 +133,6 @@ class MedicalNotesRepository:
             processing_stats = await db.medical_notes.aggregate(processing_pipeline).to_list(1)
             avg_processing_time = round(processing_stats[0]["avg_time"], 2) if processing_stats else 0
 
-            # Common ICD-10 codes
-            icd10_pipeline = [
-                {"$unwind": "$extraction.icd10_codes"},
-                {"$group": {
-                    "_id": {
-                        "code": "$extraction.icd10_codes.code",
-                        "description": "$extraction.icd10_codes.description"
-                    },
-                    "count": {"$sum": 1}
-                }},
-                {"$sort": {"count": -1}},
-                {"$limit": 10}
-            ]
-            icd10_results = await db.medical_notes.aggregate(icd10_pipeline).to_list(10)
-            common_icd10_codes = [
-                CodeFrequency(
-                    code=r["_id"]["code"],
-                    description=r["_id"]["description"],
-                    count=r["count"],
-                    percentage=min(100, round(r["count"] / max(total_processed, 1) * 100, 2))
-                ) for r in icd10_results
-            ]
-
-            # Common CPT codes
-            cpt_pipeline = [
-                {"$unwind": "$extraction.cpt_codes"},
-                {"$group": {
-                    "_id": {
-                        "code": "$extraction.cpt_codes.code",
-                        "description": "$extraction.cpt_codes.description"
-                    },
-                    "count": {"$sum": 1}
-                }},
-                {"$sort": {"count": -1}},
-                {"$limit": 10}
-            ]
-            cpt_results = await db.medical_notes.aggregate(cpt_pipeline).to_list(10)
-            common_cpt_codes = [
-                CodeFrequency(
-                    code=r["_id"]["code"],
-                    description=r["_id"]["description"],
-                    count=r["count"],
-                    percentage=min(100, round(r["count"] / max(total_processed, 1) * 100, 2))
-                ) for r in cpt_results
-            ]
-
-            # Daily extraction counts
-            daily_pipeline = [
-                {"$match": {"created_at": {"$gte": start_date}}},
-                {"$group": {"_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$created_at"}}, "count": {"$sum": 1}}},
-                {"$sort": {"_id": 1}}
-            ]
-            daily_counts = await db.medical_notes.aggregate(daily_pipeline).to_list(None)
-            daily_extraction_counts = [
-                TimeSeriesPoint(
-                    date=datetime.strptime(d["_id"], "%Y-%m-%d"),
-                    count=d["count"]
-                ) for d in daily_counts
-            ]
-
             # Fetch processed notes for quality calculations
             processed_notes = await db.medical_notes.find(
                 {"status": ExtractionStatus.COMPLETED.value}
@@ -141,9 +151,6 @@ class MedicalNotesRepository:
                 avg_processing_time_ms=avg_processing_time,
                 status_breakdown=status_breakdown or [],
                 type_breakdown=type_breakdown or [],
-                common_icd10_codes=common_icd10_codes or [],
-                common_cpt_codes=common_cpt_codes or [],
-                daily_extraction_counts=daily_extraction_counts or [],
                 documentation_quality=documentation_quality
             )
         except Exception as e:
