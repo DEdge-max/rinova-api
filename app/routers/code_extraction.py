@@ -1,17 +1,14 @@
 import logging
 import time
 import asyncio
-from datetime import datetime, date
-from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, HTTPException, Query, Depends, Request, Response
+from datetime import datetime
+from typing import Dict, Any, List
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from pydantic import BaseModel
 
 from ..services.openai_service import OpenAIService
-from ..database.mongodb import db
 from ..repositories.medical_notes import MedicalNotesRepository
 from ..models.pydantic_models import (
     ExtractionRequest,
@@ -19,21 +16,10 @@ from ..models.pydantic_models import (
     ExtractionData,
     Metadata,
     NotesListingParams,
-    NotesFilterParams,
     NotesListingResponse,
-    DashboardStatistics,
-    SortOrder,
     NoteType,
-    ExtractionStatus,
     BatchExtractionRequest
 )
-
-# Dependency functions
-def get_openai_service():
-    return OpenAIService()
-
-def get_repository():
-    return MedicalNotesRepository()
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -42,31 +28,18 @@ logging.basicConfig(level=logging.INFO)
 # Rate limiter setup
 limiter = Limiter(key_func=get_remote_address)
 
+# Dependency functions
+def get_openai_service():
+    return OpenAIService()
+
+def get_repository():
+    return MedicalNotesRepository()
+
+# Router setup - removed exception handlers
 router = APIRouter(
     prefix="/api/v1",
     tags=["Code Extraction"]
 )
-
-# Global error handler
-@router.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global error handler caught: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"success": False, "error": str(exc)}
-    )
-
-# Add rate limit exception handler
-@router.exception_handler(RateLimitExceeded)
-async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(
-        status_code=429,
-        content={
-            "success": False,
-            "error": "Rate limit exceeded",
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    )
 
 @router.post("/extract", response_model=ExtractionResponse, status_code=201)
 @limiter.limit("10/minute")
@@ -114,9 +87,8 @@ async def batch_extract_codes(
     repo: MedicalNotesRepository = Depends(get_repository)
 ):
     """ Process multiple medical texts in one request asynchronously. """
-    logger.info(f"Processing batch extraction with {len(requests.medical_texts)} texts")
-    tasks = [extract_codes(ExtractionRequest(medical_text=text), openai_service, repo) 
-             for text in requests.medical_texts]
+    logger.info(f"Processing batch extraction with {len(requests.texts)} texts")
+    tasks = [extract_codes(ExtractionRequest(medical_text=text), openai_service, repo) for text in requests.texts]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     return results
 
@@ -140,8 +112,7 @@ async def get_notes_listing(
 @router.get("/notes/dashboard", response_model=Dict[str, Any])
 @limiter.limit("5/minute")
 async def get_dashboard_statistics(
-    days: int = Query(30, ge=1, le=365),
-    repo: MedicalNotesRepository = Depends(get_repository)
+    days: int = Query(30, ge=1, le=365)
 ):
     """ Fetch dashboard statistics. """
     try:
@@ -154,8 +125,7 @@ async def get_dashboard_statistics(
 @limiter.limit("15/minute")
 async def search_notes(
     query: str = Query(..., min_length=1),
-    limit: int = Query(10, ge=1, le=50),
-    repo: MedicalNotesRepository = Depends(get_repository)
+    limit: int = Query(10, ge=1, le=50)
 ):
     """ Search notes using text search. """
     try:
@@ -167,8 +137,7 @@ async def search_notes(
 @limiter.limit("10/minute")
 async def get_notes_by_type(
     note_type: NoteType,
-    limit: int = Query(10, ge=1, le=50),
-    repo: MedicalNotesRepository = Depends(get_repository)
+    limit: int = Query(10, ge=1, le=50)
 ):
     """ Get notes of a specific type. """
     try:
