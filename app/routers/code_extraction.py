@@ -23,7 +23,8 @@ from ..models.pydantic_models import (
     NoteType,
     SortOrder,
     ExtractionStatus,
-    BatchExtractionRequest
+    BatchExtractionRequest,
+    DashboardStatistics
 )
 
 # Configure logging
@@ -45,8 +46,6 @@ router = APIRouter(
     tags=["Code Extraction"]
 )
 
-@router.post("/extract", response_model=ExtractionResponse, status_code=201)
-@limiter.limit("10/minute")
 @router.post("/extract", response_model=ExtractionResponse, status_code=201)
 @limiter.limit("10/minute")
 async def extract_codes(
@@ -114,6 +113,7 @@ async def extract_codes(
         logger.error(f"Error in extraction: {str(e)}", exc_info=True)
         return ExtractionResponse(success=False, data=None, error=str(e))
 
+
 @router.post("/extract/batch", response_model=List[ExtractionResponse], status_code=201)
 @limiter.limit("5/minute")
 async def batch_extract_codes(
@@ -122,18 +122,30 @@ async def batch_extract_codes(
     openai_service: OpenAIService = Depends(get_openai_service),
     repo: MedicalNotesRepository = Depends(get_repository)
 ):
-    """ Process multiple medical texts in one request asynchronously. """
+    """Process multiple medical texts in one request asynchronously."""
     logger.info(f"Processing batch extraction with {len(batch_request.medical_texts)} texts")
+    
     tasks = [
         extract_codes(
             request,
-            ExtractionRequest(medical_text=text),
+            ExtractionRequest(
+                medical_text=text,
+                patient_id=f"BATCH_{i}",  # Generate a batch patient ID
+                source="batch_api",
+                metadata={"batch_index": i}
+            ),
             openai_service,
             repo
-        ) for text in batch_request.medical_texts
+        ) for i, text in enumerate(batch_request.medical_texts)
     ]
+    
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    return results
+    return [
+        result if isinstance(result, ExtractionResponse)
+        else ExtractionResponse(success=False, data=None, error=str(result))
+        for result in results
+    ]
+
 
 @router.get("/notes", response_model=NotesListingResponse)
 @limiter.limit("20/minute")
@@ -197,6 +209,26 @@ async def list_notes(
             notes=[],
             error=str(e)
         )
+
+
+@router.get("/notes/dashboard", response_model=DashboardStatistics)
+@limiter.limit("5/minute")
+async def get_dashboard(
+    request: Request,
+    days: int = Query(30, ge=1, le=365, description="Number of days to analyze"),
+    repo: MedicalNotesRepository = Depends(get_repository)
+) -> DashboardStatistics:
+    """Get dashboard statistics for medical notes processing."""
+    try:
+        dashboard_stats = await repo.get_dashboard_statistics(days=days)
+        return dashboard_stats
+    except Exception as e:
+        logger.error(f"Error fetching dashboard statistics: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve dashboard statistics: {str(e)}"
+        )
+
 
 @router.get("/health")
 async def health_check():
