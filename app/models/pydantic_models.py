@@ -99,7 +99,23 @@ class ExtractionRequest(BaseModel):
         description="Medical text to extract codes from",
         example="Patient has type 2 diabetes without complications and hypertension. Office visit level 3 for evaluation."
     )
-
+    patient_id: str = Field(
+        ...,
+        min_length=1,
+        description="Unique identifier for the patient",
+        example="P12345"
+    )
+    source: str = Field(
+        default="api",
+        description="Source of the medical note",
+        example="api"
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Additional metadata for the note",
+        example={"facility": "General Hospital", "department": "Cardiology"}
+    )
+    
 class ICD10Code(BaseModel):
     """Represents an ICD-10 medical diagnostic code."""
     code: str = Field(
