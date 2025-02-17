@@ -88,7 +88,7 @@ class MedicalNotesRepository:
             sanitized_data.update({
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
-                "status": ExtractionStatus.PROCESSING.value,  # Changed from PENDING
+                "status": ExtractionStatus.PENDING.value,  # Changed from PENDING
                 "extraction_attempts": 0
             })
             
