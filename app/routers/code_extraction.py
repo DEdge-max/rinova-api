@@ -47,6 +47,8 @@ router = APIRouter(
 
 @router.post("/extract", response_model=ExtractionResponse, status_code=201)
 @limiter.limit("10/minute")
+@router.post("/extract", response_model=ExtractionResponse, status_code=201)
+@limiter.limit("10/minute")
 async def extract_codes(
     request: Request,
     extraction_request: ExtractionRequest,
@@ -58,7 +60,25 @@ async def extract_codes(
     start_time = time.time()
     
     try:
-        note_id = await repo.create_note(extraction_request.medical_text)
+        # Create properly structured note document
+        note_data = {
+            "note_text": extraction_request.medical_text,
+            "patient_id": extraction_request.patient_id,
+            "source": extraction_request.source,
+            "metadata": extraction_request.metadata,
+            "length": len(extraction_request.medical_text)
+        }
+        
+        # Create note in database
+        note_id = await repo.create_note(note_data)
+        
+        if not note_id:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create note in database"
+            )
+
+        # Extract codes using OpenAI
         extracted_data = await openai_service.extract_medical_codes(extraction_request.medical_text)
         processing_time = int((time.time() - start_time) * 1000)
         
@@ -77,9 +97,19 @@ async def extract_codes(
             metadata=metadata
         )
         
-        await repo.update_extraction(note_id, data.dict())
+        update_success = await repo.update_extraction(note_id, data.dict())
+        
+        if not update_success:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to update note {note_id} with extraction results"
+            )
+
         return ExtractionResponse(success=True, data=data, error=None)
         
+    except HTTPException as he:
+        logger.error(f"HTTP error in extraction: {str(he)}")
+        return ExtractionResponse(success=False, data=None, error=str(he))
     except Exception as e:
         logger.error(f"Error in extraction: {str(e)}", exc_info=True)
         return ExtractionResponse(success=False, data=None, error=str(e))
