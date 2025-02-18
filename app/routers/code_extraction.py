@@ -18,7 +18,7 @@ from app.repositories.medical_notes import MedicalNotesRepository
 router = APIRouter(prefix="/api/v1", tags=["medical-notes"])
 
 # Create repository instance
-notes_repository = MedicalNotesRepository()
+notes_repository = MedicalNotesRepository()  # No parameters needed now
 
 # Dependency for initialization
 async def get_repository():
@@ -59,7 +59,7 @@ async def get_note(
     """Get a specific medical note by ID."""
     try:
         object_id = validate_object_id(note_id)
-        note = await repository.get_note_by_id(object_id)
+        note = await repository.get_note_by_id(str(object_id))
         if not note:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -84,7 +84,8 @@ async def create_note(
 ):
     """Create a new medical note."""
     try:
-        new_note = await repository.create_note(note)
+        new_note_id = await repository.create_note(note)
+        new_note = await repository.get_note_by_id(new_note_id)
         return NoteResponse(
             message="Note created successfully",
             note=new_note
@@ -104,12 +105,13 @@ async def update_note(
     """Update an existing medical note."""
     try:
         object_id = validate_object_id(note_id)
-        updated_note = await repository.update_note(object_id, note_update)
-        if not updated_note:
+        updated = await repository.update_note(str(object_id), note_update)
+        if not updated:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Note with ID {note_id} not found"
             )
+        updated_note = await repository.get_note_by_id(str(object_id))
         return NoteResponse(
             message="Note updated successfully",
             note=updated_note
@@ -122,6 +124,28 @@ async def update_note(
             detail=f"Failed to update note: {str(e)}"
         )
 
+@router.delete("/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_note(
+    note_id: str,
+    repository: MedicalNotesRepository = Depends(get_repository)
+):
+    """Delete a medical note."""
+    try:
+        object_id = validate_object_id(note_id)
+        deleted = await repository.delete_note(str(object_id))
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Note with ID {note_id} not found"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete note: {str(e)}"
+        )
+
 @router.post("/extract", response_model=ExtractionResponse)
 async def extract_codes(
     note_id: str,
@@ -132,7 +156,7 @@ async def extract_codes(
         object_id = validate_object_id(note_id)
         
         # Get the note
-        note = await repository.get_note_by_id(object_id)
+        note = await repository.get_note_by_id(str(object_id))
         if not note:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -143,8 +167,13 @@ async def extract_codes(
         extraction_result = await openai_service.extract_codes(note.note_text)
 
         # Update note with extracted codes
-        note_update = NoteUpdate(extraction_result=extraction_result)
-        updated_note = await repository.update_note(object_id, note_update)
+        updated = await repository.extract_codes_for_note(str(object_id), extraction_result)
+
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to attach extracted codes to note {note_id}"
+            )
 
         return ExtractionResponse(
             message="Codes extracted successfully",
