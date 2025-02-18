@@ -114,16 +114,16 @@ async def startup_db_client():
         await db.client.admin.command('ping')
         logger.info("✅ Connected to MongoDB!")
 
-        # Create necessary indexes (Fixed Parallel Arrays Issue)
+        # Create indexes matching our new schema
         try:
             indexes = [
-                IndexModel([("created_at", DESCENDING)], background=True),
-                IndexModel([("status", ASCENDING)], background=True),
-                IndexModel([("text", TEXT)], background=True),
-                IndexModel([("extraction.note_type", ASCENDING)], background=True),
-                IndexModel([("patient_id", ASCENDING)], background=True),
-                IndexModel([("extraction.icd10_codes.code", ASCENDING)], background=True),
-                IndexModel([("extraction.cpt_codes.code", ASCENDING)], background=True)
+                IndexModel([("date", DESCENDING)], background=True),
+                IndexModel([("doctor_name", ASCENDING)], background=True),
+                IndexModel([("patient_name", ASCENDING)], background=True),
+                IndexModel([("note_text", TEXT)], background=True),
+                IndexModel([("extraction_result.icd10_codes.code", ASCENDING)], background=True),
+                IndexModel([("extraction_result.cpt_codes.code", ASCENDING)], background=True),
+                IndexModel([("extraction_result.hcpcs_codes.code", ASCENDING)], background=True)
             ]
             await db.medical_notes.create_indexes(indexes)
             logger.info("✅ Database indexes created successfully!")
@@ -157,6 +157,7 @@ async def root():
 @limiter.limit("5/minute")
 async def health_check(request: Request):
     return await check_system_health()
+
 # Exception Handlers
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
