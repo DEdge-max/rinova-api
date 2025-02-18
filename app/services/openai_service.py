@@ -14,7 +14,7 @@ from app.models.pydantic_models import (
 
 # Configure logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)  # Adjust to DEBUG for more verbose logging
+logger.setLevel(logging.INFO)
 
 class OpenAIService:
     def __init__(self):
@@ -39,10 +39,30 @@ class OpenAIService:
 For each type of code (ICD-10, CPT, HCPCS):
 - Extract all relevant codes based on the documentation
 - Provide specific descriptions
-- Assign confidence scores (0-100%)
+- Assign confidence scores (0-100%) based on documentation quality:
+  * 90-100%: Clear, unambiguous documentation
+  * 70-89%: Supports but lacks some specificity
+  * 50-69%: Ambiguous, moderate confidence
+  * Below 50%: Insufficient detail
 - Include suggestions for missing information
 - For CPT codes, provide alternative codes with justification
-- Identify applicable modifiers
+
+Rules for different note types:
+1. For minimal notes (1-2 lines):
+   - Provide basic E/M codes with low confidence scores
+   - Suggest documentation improvements
+   - Include probable diagnoses with very low confidence
+
+2. For standard notes:
+   - Extract all explicit diagnoses and procedures
+   - Consider complexity and time for E/M coding
+   - Include modifiers when justified
+
+3. For comprehensive notes:
+   - Detailed analysis of all conditions
+   - Consider medical decision making
+   - Include chronic care management if applicable
+   - Add preventive service codes if relevant
 
 Your response must be valid JSON matching this exact structure:
 {
@@ -94,7 +114,7 @@ Your response must be valid JSON matching this exact structure:
   ]
 }"""
 
-            user_prompt = f"Analyze this medical note and extract all relevant medical codes:\n\n{note_text}"
+            user_prompt = f"Analyze this medical note and extract all relevant medical codes. Always generate codes even if the note is very brief:\n\n{note_text}"
 
             logger.info("Calling OpenAI API for code extraction...")
             response = await self._get_completion(system_prompt, user_prompt)
@@ -116,10 +136,10 @@ Your response must be valid JSON matching this exact structure:
                 )
 
                 logger.info(f"Extracted {len(result.icd10_codes)} ICD-10 codes, "
-                            f"{len(result.cpt_codes)} CPT codes, "
-                            f"{len(result.hcpcs_codes)} HCPCS codes, "
-                            f"{len(result.modifiers)} modifiers, and "
-                            f"{len(result.alternative_cpts)} alternative CPT codes.")
+                          f"{len(result.cpt_codes)} CPT codes, "
+                          f"{len(result.hcpcs_codes)} HCPCS codes, "
+                          f"{len(result.modifiers)} modifiers, and "
+                          f"{len(result.alternative_cpts)} alternative CPT codes.")
 
                 return result
 
@@ -151,7 +171,7 @@ Your response must be valid JSON matching this exact structure:
                 ],
                 temperature=0.0,
                 max_tokens=4000,
-                response_format="json_object"  # UPDATED PARAMETER TO MATCH OPENAI REQUIREMENTS
+                response_format={"type": "json_object"}
             )
             logger.info("Successfully received completion from OpenAI")
             return response.choices[0].message.content
