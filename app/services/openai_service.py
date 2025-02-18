@@ -1,3 +1,4 @@
+import logging
 from openai import OpenAI
 import json
 from typing import Dict, Any
@@ -11,22 +12,28 @@ from app.models.pydantic_models import (
     AlternativeCPT
 )
 
+# Configure logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Adjust to DEBUG for more verbose logging
+
 class OpenAIService:
     def __init__(self):
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = "gpt-4-turbo-preview"  # Using the latest GPT-4 model
+        self.model = "gpt-4-turbo-preview"
 
     async def extract_codes(self, note_text: str) -> CodeExtractionResult:
         """
         Extract medical codes from the provided note text using OpenAI's GPT-4.
-        
+
         Args:
             note_text (str): The medical note text to analyze
-            
+
         Returns:
             CodeExtractionResult: Extracted medical codes with confidence scores
         """
         try:
+            logger.info("Starting code extraction for medical note")
+
             system_prompt = """You are a highly specialized AI assistant designed to analyze medical documentation and extract structured coding information in JSON format. Your primary task is to process clinical notes written in various formats (e.g., SOAP, HPI, CC) and generate the following outputs with precision and clarity. Your output must always be generated, regardless of the length, completeness, or quality of the note. Never return an error.
 
 For each type of code (ICD-10, CPT, HCPCS):
@@ -89,50 +96,68 @@ Your response must be valid JSON matching this exact structure:
 
             user_prompt = f"Analyze this medical note and extract all relevant medical codes:\n\n{note_text}"
 
+            logger.info("Calling OpenAI API for code extraction...")
             response = await self._get_completion(system_prompt, user_prompt)
-            
+            logger.info("Received response from OpenAI")
+            logger.debug(f"Raw OpenAI response: {response}")
+
             # Parse the JSON response
             try:
                 extraction_data = json.loads(response)
-                return CodeExtractionResult(
+                logger.info("Successfully parsed JSON response")
+                logger.debug(f"Parsed extraction data: {json.dumps(extraction_data, indent=2)}")
+
+                result = CodeExtractionResult(
                     icd10_codes=[ICD10Code(**code) for code in extraction_data.get("icd10_codes", [])],
                     cpt_codes=[CPTCode(**code) for code in extraction_data.get("cpt_codes", [])],
                     alternative_cpts=[AlternativeCPT(**code) for code in extraction_data.get("alternative_cpts", [])],
                     modifiers=[Modifier(**mod) for mod in extraction_data.get("modifiers", [])],
                     hcpcs_codes=[HCPCSCode(**code) for code in extraction_data.get("hcpcs_codes", [])]
                 )
+
+                logger.info(f"Extracted {len(result.icd10_codes)} ICD-10 codes, "
+                            f"{len(result.cpt_codes)} CPT codes, "
+                            f"{len(result.hcpcs_codes)} HCPCS codes, "
+                            f"{len(result.modifiers)} modifiers, and "
+                            f"{len(result.alternative_cpts)} alternative CPT codes.")
+
+                return result
+
             except json.JSONDecodeError as e:
-                print(f"JSON parsing error: {e}")
-                print(f"Raw response: {response}")
+                logger.error(f"JSON parsing error: {e}")
+                logger.error(f"Raw response that failed parsing: {response}")
                 raise ValueError("Failed to parse OpenAI response as JSON")
+
             except Exception as e:
-                print(f"Error processing response: {e}")
+                logger.error(f"Error processing response: {str(e)}")
+                logger.error(f"Extraction data that caused error: {json.dumps(extraction_data, indent=2) if 'extraction_data' in locals() else 'Not available'}")
                 raise ValueError(f"Failed to process OpenAI response: {str(e)}")
 
         except Exception as e:
-            print(f"Error in extract_codes: {e}")
-            # Return empty result structure in case of error
-            return CodeExtractionResult()
+            logger.error(f"Error in extract_codes: {str(e)}")
+            raise
 
     async def _get_completion(self, system_prompt: str, user_prompt: str) -> str:
         """
-        Get completion from OpenAI API with error handling and retry logic.
+        Get completion from OpenAI API with error handling and logging.
         """
         try:
+            logger.info(f"Requesting completion from OpenAI with model: {self.model}")
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.0,  # Using 0 temperature for consistent, deterministic outputs
+                temperature=0.0,
                 max_tokens=4000,
-                response_format={ "type": "json" }  # Ensure JSON response
+                response_format={"type": "json"}
             )
+            logger.info("Successfully received completion from OpenAI")
             return response.choices[0].message.content
 
         except Exception as e:
-            print(f"OpenAI API error: {e}")
+            logger.error(f"OpenAI API error: {str(e)}")
             raise ValueError(f"Failed to get OpenAI completion: {str(e)}")
 
 # Create a singleton instance
