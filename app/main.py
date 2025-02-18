@@ -109,8 +109,10 @@ async def create_indexes(medical_notes):
     """Create indexes if they don't exist."""
     try:
         # Get existing indexes
-        existing_indexes = await medical_notes.list_indexes()
-        existing_index_names = [idx['name'] async for idx in existing_indexes]
+        index_cursor = medical_notes.list_indexes()
+        existing_index_names = []
+        async for idx in index_cursor:
+            existing_index_names.append(idx['name'])
         
         # Define indexes
         indexes = []
