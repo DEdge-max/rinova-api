@@ -163,7 +163,7 @@ Your response must be valid JSON matching this exact structure:
         """
         try:
             logger.info(f"Requesting completion from OpenAI with model: {self.model}")
-            response = await self.client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
