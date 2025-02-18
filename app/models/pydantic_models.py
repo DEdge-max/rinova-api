@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, conlist
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 from bson import ObjectId
@@ -15,8 +15,8 @@ class PyObjectId(ObjectId):
         return ObjectId(v)
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+    def __get_pydantic_json_schema__(cls, core_schema, handler):
+        return {"type": "string"}
 
 class BaseCode(BaseModel):
     code: str = Field(..., description="The medical code")
@@ -51,17 +51,14 @@ class CodeExtractionResult(BaseModel):
     hcpcs_codes: List[HCPCSCode] = Field(default=[], description="Extracted HCPCS codes")
 
 class MedicalNote(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True, json_encoders={ObjectId: str})
+    
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     doctor_name: str = Field(..., min_length=1)
     patient_name: str = Field(..., min_length=1)
     date: datetime = Field(default_factory=datetime.now)
     note_text: str = Field(..., min_length=1)
     extraction_result: Optional[CodeExtractionResult] = None
-    
-    class Config:
-        allow_population_by_field_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str}
 
 class NoteCreate(BaseModel):
     doctor_name: str
