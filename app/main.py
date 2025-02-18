@@ -75,6 +75,9 @@ async def check_system_health() -> Dict[str, Any]:
 
     # MongoDB Health Check
     try:
+        if db.db is None:
+            raise Exception("Database connection is None.")
+        
         await db.client.admin.command('ping')
         db_stats = await db.db.command("dbStats")
         collections = await db.db.list_collection_names()
@@ -85,7 +88,7 @@ async def check_system_health() -> Dict[str, Any]:
             "size_mb": round(db_stats["dataSize"] / (1024 * 1024), 2)
         }
     except Exception as e:
-        logger.error(f"MongoDB health check failed: {str(e)}")
+        logger.error(f"❌ MongoDB health check failed: {str(e)}")
         status["services"]["mongodb"] = {"status": "unhealthy", "error": str(e)}
 
     # OpenAI API Check
@@ -97,7 +100,7 @@ async def check_system_health() -> Dict[str, Any]:
             client = openai.OpenAI(api_key=openai_api_key)
             status["services"]["openai"] = {"status": "healthy"}
         except Exception as e:
-            logger.error(f"OpenAI API health check failed: {str(e)}")
+            logger.error(f"❌ OpenAI API health check failed: {str(e)}")
             status["services"]["openai"] = {"status": "unhealthy", "error": str(e)}
 
     system_status_cache["last_check"] = current_time
@@ -108,6 +111,9 @@ async def check_system_health() -> Dict[str, Any]:
 async def create_indexes(medical_notes):
     """Create indexes if they don't exist."""
     try:
+        if medical_notes is None:
+            raise Exception("Database collection is None.")
+        
         # Get existing indexes
         index_cursor = medical_notes.list_indexes()
         existing_index_names = []
@@ -116,31 +122,28 @@ async def create_indexes(medical_notes):
         
         # Define indexes
         indexes = []
-        
-        # Only add indexes that don't exist
+
         if "date_-1" not in existing_index_names:
             indexes.append(IndexModel([("date", DESCENDING)]))
-        
+
         if "doctor_name_1" not in existing_index_names:
             indexes.append(IndexModel([("doctor_name", ASCENDING)]))
-            
+
         if "patient_name_1" not in existing_index_names:
             indexes.append(IndexModel([("patient_name", ASCENDING)]))
-            
-        # Skip text index if any text index exists
+
         if not any("text" in idx_name for idx_name in existing_index_names):
             indexes.append(IndexModel([("note_text", TEXT)]))
-            
+
         if "extraction_result.icd10_codes.code_1" not in existing_index_names:
             indexes.append(IndexModel([("extraction_result.icd10_codes.code", ASCENDING)]))
-            
+
         if "extraction_result.cpt_codes.code_1" not in existing_index_names:
             indexes.append(IndexModel([("extraction_result.cpt_codes.code", ASCENDING)]))
-            
+
         if "extraction_result.hcpcs_codes.code_1" not in existing_index_names:
             indexes.append(IndexModel([("extraction_result.hcpcs_codes.code", ASCENDING)]))
 
-        # Create new indexes if any
         if indexes:
             await medical_notes.create_indexes(indexes)
             logger.info("✅ New database indexes created successfully!")
@@ -149,22 +152,21 @@ async def create_indexes(medical_notes):
             
     except Exception as e:
         logger.error(f"❌ Index operation warning: {str(e)}")
-        # Don't raise the exception - allow the app to start even if index creation fails
 
-# Database Connection Handling
 @app.on_event("startup")
 async def startup_db_client():
     """Initialize database connection and create indexes"""
     try:
         await db.connect_to_mongodb()
-        await db.client.admin.command('ping')
+        if db.get_db() is None:
+            raise Exception("Database connection failed.")
+        
         logger.info("✅ Connected to MongoDB!")
 
-        # Create indexes after we have a valid connection
         database = db.get_db()
         medical_notes = database.medical_notes
         await create_indexes(medical_notes)
-        
+
         await check_system_health()
     except Exception as e:
         logger.error(f"❌ Failed to connect to MongoDB: {str(e)}")
@@ -176,7 +178,6 @@ async def shutdown_db_client():
     await db.close_mongodb_connection()
     logger.info("✅ Disconnected from MongoDB.")
 
-# Root Endpoint
 @app.get("/", tags=["Health"])
 async def root():
     return {
@@ -187,16 +188,13 @@ async def root():
         "docs": "/docs"
     }
 
-# Enhanced Health Check with Rate Limiting
 @app.get("/health", tags=["Health"])
 @limiter.limit("5/minute")
 async def health_check(request: Request):
     return await check_system_health()
 
-# Exception Handlers
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    """Handle rate limit exceptions"""
     return JSONResponse(
         status_code=429,
         content={
@@ -213,7 +211,6 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions"""
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -221,24 +218,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "error": {
                 "code": exc.status_code,
                 "message": exc.detail,
-                "timestamp": datetime.utcnow().isoformat()
-            },
-            "data": None
-        }
-    )
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
-    """Handle all other exceptions"""
-    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "success": False,
-            "error": {
-                "code": 500,
-                "message": "Internal server error",
-                "detail": str(exc),
                 "timestamp": datetime.utcnow().isoformat()
             },
             "data": None
