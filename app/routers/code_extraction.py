@@ -14,11 +14,12 @@ from app.models.pydantic_models import (
 )
 from app.services.openai_service import openai_service
 from app.repositories.medical_notes import MedicalNotesRepository
+from app.database.mongodb import db  # Ensure MongoDB connection is available
 
 router = APIRouter(prefix="/api/v1", tags=["medical-notes"])
 
-# Create repository instance
-notes_repository = MedicalNotesRepository()  # No parameters needed now
+# Create repository instance with a database connection
+notes_repository = MedicalNotesRepository(db.get_db())
 
 # Dependency for initialization
 async def get_repository():
@@ -122,68 +123,4 @@ async def update_note(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update note: {str(e)}"
-        )
-
-@router.delete("/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_note(
-    note_id: str,
-    repository: MedicalNotesRepository = Depends(get_repository)
-):
-    """Delete a medical note."""
-    try:
-        object_id = validate_object_id(note_id)
-        deleted = await repository.delete_note(str(object_id))
-        if not deleted:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Note with ID {note_id} not found"
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete note: {str(e)}"
-        )
-
-@router.post("/extract", response_model=ExtractionResponse)
-async def extract_codes(
-    note_id: str,
-    repository: MedicalNotesRepository = Depends(get_repository)
-):
-    """Extract medical codes from a note's text using OpenAI."""
-    try:
-        object_id = validate_object_id(note_id)
-        
-        # Get the note
-        note = await repository.get_note_by_id(str(object_id))
-        if not note:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Note with ID {note_id} not found"
-            )
-
-        # Extract codes using OpenAI
-        extraction_result = await openai_service.extract_codes(note.note_text)
-
-        # Update note with extracted codes
-        updated = await repository.extract_codes_for_note(str(object_id), extraction_result)
-
-        if not updated:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to attach extracted codes to note {note_id}"
-            )
-
-        return ExtractionResponse(
-            message="Codes extracted successfully",
-            extraction_result=extraction_result
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to extract codes: {str(e)}"
         )
