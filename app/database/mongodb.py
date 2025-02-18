@@ -5,9 +5,8 @@ import os
 load_dotenv()
 
 class MongoDB:
-    def __init__(self):
-        self.client = None
-        self.db = None
+    client: AsyncIOMotorClient = None
+    db = None
 
     async def connect_to_mongodb(self):
         self.client = AsyncIOMotorClient(os.getenv("MONGODB_URL"))
@@ -25,9 +24,12 @@ class MongoDB:
             self.client.close()
             print("MongoDB connection closed.")
 
-    @property
-    def medical_notes(self):
-        return self.db.medical_notes
+    def get_db(self):
+        return self.db
 
-
+# Create a global instance
 db = MongoDB()
+
+# Function to get database instance
+def get_database():
+    return db.get_db()
