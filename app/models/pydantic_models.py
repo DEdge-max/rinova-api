@@ -9,12 +9,12 @@ class PyObjectId(ObjectId):
         yield cls.validate
 
     @classmethod
-    def validate(cls, value):
-        if isinstance(value, ObjectId):
-            return value
-        if not ObjectId.is_valid(value):
+    def validate(cls, v, handler):  # Added handler parameter
+        if isinstance(v, ObjectId):
+            return v
+        if not ObjectId.is_valid(v):
             raise ValueError("Invalid ObjectId")
-        return ObjectId(value)
+        return ObjectId(v)
 
     @classmethod
     def __get_pydantic_json_schema__(cls, core_schema, handler):
@@ -26,6 +26,7 @@ class BaseCode(BaseModel):
     confidence_score: float = Field(..., ge=0, le=100, description="Confidence score (0-100%)")
     suggestions: List[str] = Field(default=[], description="Suggestions for improving documentation")
 
+# Rest of your models remain the same...
 class ICD10Code(BaseCode):
     pass
 
