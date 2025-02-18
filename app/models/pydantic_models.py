@@ -94,10 +94,7 @@ class ExtractionResponse(BaseModel):
 # New models for quick-extract endpoint
 class QuickExtractionRequest(BaseModel):
     note_text: str
-    doctor_name: Optional[str] = "Unknown"
-    patient_name: Optional[str] = "Unknown"
-    date: Optional[datetime] = None
-
+    
 class QuickExtractionResponse(BaseModel):
     message: str
     note_id: str
