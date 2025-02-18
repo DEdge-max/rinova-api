@@ -9,14 +9,17 @@ class PyObjectId(ObjectId):
         yield cls.validate
 
     @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
+    def validate(cls, v):  # Removed the extra argument
+        if not isinstance(v, ObjectId):
+            if not ObjectId.is_valid(v):
+                raise ValueError("Invalid ObjectId")
+            v = ObjectId(v)
+        return v
 
     @classmethod
     def __get_pydantic_json_schema__(cls, core_schema, handler):
         return {"type": "string"}
+
 
 class BaseCode(BaseModel):
     code: str = Field(..., description="The medical code")
