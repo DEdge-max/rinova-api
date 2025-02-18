@@ -52,6 +52,13 @@ class CodeExtractionResult(BaseModel):
     modifiers: List[Modifier] = Field(default=[], description="Applicable modifiers")
     hcpcs_codes: List[HCPCSCode] = Field(default=[], description="Extracted HCPCS codes")
 
+class UpdatedCodes(BaseModel):
+    icd10_codes: List[ICD10Code] = Field(default=[], description="Final sorted ICD-10 codes")
+    cpt_codes: List[CPTCode] = Field(default=[], description="Final sorted CPT codes")
+    modifiers: List[Modifier] = Field(default=[], description="Final sorted modifiers")
+    hcpcs_codes: List[HCPCSCode] = Field(default=[], description="Final sorted HCPCS codes")
+    alternative_cpts: List[AlternativeCPT] = Field(default=[], description="Remaining alternative CPTs")
+
 class MedicalNote(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
