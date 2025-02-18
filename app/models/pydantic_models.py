@@ -9,7 +9,7 @@ class PyObjectId(ObjectId):
         yield cls.validate
 
     @classmethod
-    def validate(cls, v, handler):  # Added handler parameter
+    def validate(cls, v, handler):
         if isinstance(v, ObjectId):
             return v
         if not ObjectId.is_valid(v):
@@ -91,8 +91,14 @@ class ExtractionResponse(BaseModel):
     message: str
     extraction_result: CodeExtractionResult
 
+# New models for quick-extract endpoint
 class QuickExtractionRequest(BaseModel):
     note_text: str
     doctor_name: Optional[str] = "Unknown"
     patient_name: Optional[str] = "Unknown"
     date: Optional[datetime] = None
+
+class QuickExtractionResponse(BaseModel):
+    message: str
+    note_id: str
+    extraction_result: CodeExtractionResult
