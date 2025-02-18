@@ -13,7 +13,8 @@ from app.models.pydantic_models import (
     ExtractionResponse,
     CodeExtractionResult,
     QuickExtractionRequest,
-    QuickExtractionResponse
+    QuickExtractionResponse,
+    UpdatedCodes
 )
 from app.services.openai_service import openai_service
 from app.repositories.medical_notes import MedicalNotesRepository
@@ -208,4 +209,47 @@ async def quick_extract(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to extract codes: {str(e)}"
+        )
+
+@router.put("/notes/{note_id}/save-sorted", response_model=NoteResponse)
+async def save_sorted_codes(
+    note_id: str,
+    updated_codes: UpdatedCodes,
+    repository: MedicalNotesRepository = Depends(get_repository)
+):
+    """Update a note with manually sorted/finalized codes."""
+    try:
+        object_id = validate_object_id(note_id)
+        
+        # Get the existing note
+        note = await repository.get_note_by_id(str(object_id))
+        if not note:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Note with ID {note_id} not found"
+            )
+        # Create updated extraction result
+        note_update = NoteUpdate(
+            extraction_result=CodeExtractionResult(**updated_codes.dict())
+        )
+        
+        # Update the note
+        updated = await repository.update_note(str(object_id), note_update)
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to update codes"
+            )
+        # Return updated note
+        updated_note = await repository.get_note_by_id(str(object_id))
+        return NoteResponse(
+            message="Codes sorted and saved successfully",
+            note=updated_note
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save sorted codes: {str(e)}"
         )
