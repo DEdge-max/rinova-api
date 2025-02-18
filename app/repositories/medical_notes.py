@@ -9,6 +9,9 @@ from app.models.pydantic_models import (
     CodeExtractionResult
 )
 from app.database.mongodb import db
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MedicalNotesRepository:
     def __init__(self):
@@ -16,10 +19,19 @@ class MedicalNotesRepository:
         self.collection = None
 
     async def initialize(self):
-        """Initialize database connection"""
+        """Initialize database connection and ensure collection exists"""
         if not self.db:
-            self.db = db.get_db()
-            self.collection = self.db.medical_notes
+            try:
+                self.db = db.get_db()
+                # Ensure collection exists
+                collections = await self.db.list_collection_names()
+                if 'medical_notes' not in collections:
+                    await self.db.create_collection('medical_notes')
+                self.collection = self.db.medical_notes
+                logger.info("✅ Medical notes collection initialized")
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize medical notes collection: {str(e)}")
+                raise
 
     async def get_all_notes(self) -> List[MedicalNote]:
         """Retrieve all medical notes from the database."""
@@ -31,7 +43,7 @@ class MedicalNotesRepository:
                 notes.append(MedicalNote(**document))
             return notes
         except Exception as e:
-            print(f"Error retrieving all notes: {e}")
+            logger.error(f"Error retrieving all notes: {e}")
             raise
 
     async def get_note_by_id(self, note_id: ObjectId) -> Optional[MedicalNote]:
@@ -43,7 +55,7 @@ class MedicalNotesRepository:
                 return MedicalNote(**document)
             return None
         except Exception as e:
-            print(f"Error retrieving note {note_id}: {e}")
+            logger.error(f"Error retrieving note {note_id}: {e}")
             raise
 
     async def create_note(self, note: NoteCreate) -> MedicalNote:
@@ -64,7 +76,7 @@ class MedicalNotesRepository:
             
             return created_note
         except Exception as e:
-            print(f"Error creating note: {e}")
+            logger.error(f"Error creating note: {e}")
             raise
 
     async def update_note(self, note_id: ObjectId, note_update: NoteUpdate) -> Optional[MedicalNote]:
@@ -94,7 +106,7 @@ class MedicalNotesRepository:
 
             return updated_note
         except Exception as e:
-            print(f"Error updating note {note_id}: {e}")
+            logger.error(f"Error updating note {note_id}: {e}")
             raise
 
     async def update_extraction_result(
@@ -116,5 +128,5 @@ class MedicalNotesRepository:
 
             return updated_note
         except Exception as e:
-            print(f"Error updating extraction result for note {note_id}: {e}")
+            logger.error(f"Error updating extraction result for note {note_id}: {e}")
             raise
