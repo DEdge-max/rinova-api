@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 from bson import ObjectId
 from bson.errors import InvalidId
+from datetime import datetime
 
 from app.models.pydantic_models import (
     MedicalNote,
@@ -10,12 +11,14 @@ from app.models.pydantic_models import (
     NoteResponse,
     NotesListResponse,
     ExtractionResponse,
-    CodeExtractionResult
+    CodeExtractionResult,
+    QuickExtractionRequest,
+    QuickExtractionResponse
 )
 from app.services.openai_service import openai_service
 from app.repositories.medical_notes import MedicalNotesRepository
 
-router = APIRouter(prefix="/api/v1", tags=["medical-notes"])
+router = APIRouter(prefix="/api/v1", tags=["Code Extraction"])
 
 # Lazy initialization of repository
 notes_repository = MedicalNotesRepository()
@@ -134,7 +137,6 @@ async def update_note(
             detail=f"Failed to update note: {str(e)}"
         )
 
-### 🚀 **RESTORED `extract_codes` ENDPOINT** ###
 @router.post("/extract", response_model=ExtractionResponse)
 async def extract_codes(
     note_id: str,
@@ -157,7 +159,7 @@ async def extract_codes(
 
         # Update note with extracted codes
         note_update = NoteUpdate(extraction_result=extraction_result)
-        updated_note = await repository.update_note(str(object_id), note_update)
+        await repository.update_note(str(object_id), note_update)
 
         return ExtractionResponse(
             message="Codes extracted successfully",
@@ -166,6 +168,42 @@ async def extract_codes(
 
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to extract codes: {str(e)}"
+        )
+
+@router.post("/quick-extract", response_model=QuickExtractionResponse)
+async def quick_extract(
+    request: QuickExtractionRequest,
+    repository: MedicalNotesRepository = Depends(get_repository)
+):
+    """Extract medical codes from note text and save to database with default values if needed."""
+    try:
+        # Create a new note with provided or default values
+        note_create = NoteCreate(
+            doctor_name=request.doctor_name,
+            patient_name=request.patient_name,
+            note_text=request.note_text,
+            date=request.date or datetime.now()
+        )
+
+        # Save note to database
+        new_note_id = await repository.create_note(note_create)
+
+        # Extract codes using OpenAI
+        extraction_result = await openai_service.extract_codes(request.note_text)
+
+        # Update note with extracted codes
+        note_update = NoteUpdate(extraction_result=extraction_result)
+        await repository.update_note(new_note_id, note_update)
+
+        return QuickExtractionResponse(
+            message="Codes extracted successfully",
+            note_id=new_note_id,
+            extraction_result=extraction_result
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
