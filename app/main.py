@@ -105,6 +105,50 @@ async def check_system_health() -> Dict[str, Any]:
 
     return status
 
+async def create_indexes(medical_notes):
+    """Create indexes if they don't exist."""
+    try:
+        # Get existing indexes
+        existing_indexes = await medical_notes.list_indexes()
+        existing_index_names = [idx['name'] async for idx in existing_indexes]
+        
+        # Define indexes
+        indexes = []
+        
+        # Only add indexes that don't exist
+        if "date_-1" not in existing_index_names:
+            indexes.append(IndexModel([("date", DESCENDING)]))
+        
+        if "doctor_name_1" not in existing_index_names:
+            indexes.append(IndexModel([("doctor_name", ASCENDING)]))
+            
+        if "patient_name_1" not in existing_index_names:
+            indexes.append(IndexModel([("patient_name", ASCENDING)]))
+            
+        # Skip text index if any text index exists
+        if not any("text" in idx_name for idx_name in existing_index_names):
+            indexes.append(IndexModel([("note_text", TEXT)]))
+            
+        if "extraction_result.icd10_codes.code_1" not in existing_index_names:
+            indexes.append(IndexModel([("extraction_result.icd10_codes.code", ASCENDING)]))
+            
+        if "extraction_result.cpt_codes.code_1" not in existing_index_names:
+            indexes.append(IndexModel([("extraction_result.cpt_codes.code", ASCENDING)]))
+            
+        if "extraction_result.hcpcs_codes.code_1" not in existing_index_names:
+            indexes.append(IndexModel([("extraction_result.hcpcs_codes.code", ASCENDING)]))
+
+        # Create new indexes if any
+        if indexes:
+            await medical_notes.create_indexes(indexes)
+            logger.info("✅ New database indexes created successfully!")
+        else:
+            logger.info("✅ All required indexes already exist!")
+            
+    except Exception as e:
+        logger.error(f"❌ Index operation warning: {str(e)}")
+        # Don't raise the exception - allow the app to start even if index creation fails
+
 # Database Connection Handling
 @app.on_event("startup")
 async def startup_db_client():
@@ -115,26 +159,10 @@ async def startup_db_client():
         logger.info("✅ Connected to MongoDB!")
 
         # Create indexes after we have a valid connection
-        try:
-            database = db.get_db()
-            medical_notes = database.medical_notes
-
-            indexes = [
-                IndexModel([("date", DESCENDING)]),
-                IndexModel([("doctor_name", ASCENDING)]),
-                IndexModel([("patient_name", ASCENDING)]),
-                IndexModel([("note_text", TEXT)]),
-                IndexModel([("extraction_result.icd10_codes.code", ASCENDING)]),
-                IndexModel([("extraction_result.cpt_codes.code", ASCENDING)]),
-                IndexModel([("extraction_result.hcpcs_codes.code", ASCENDING)])
-            ]
-            
-            await medical_notes.create_indexes(indexes)
-            logger.info("✅ Database indexes created successfully!")
-        except Exception as e:
-            logger.error(f"❌ Failed to create indexes: {str(e)}")
-            # Don't raise the exception - allow the app to start even if index creation fails
-
+        database = db.get_db()
+        medical_notes = database.medical_notes
+        await create_indexes(medical_notes)
+        
         await check_system_health()
     except Exception as e:
         logger.error(f"❌ Failed to connect to MongoDB: {str(e)}")
