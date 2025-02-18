@@ -12,7 +12,12 @@ class MongoDB:
     async def connect_to_mongodb(self):
         self.client = AsyncIOMotorClient(os.getenv("MONGODB_URL"))
         self.db = self.client[os.getenv("MONGODB_DB_NAME", "rinova")]
-        # Create indexes here later
+        
+        # Create indexes for better query performance
+        await self.db.medical_notes.create_index("date")
+        await self.db.medical_notes.create_index([("doctor_name", 1)])
+        await self.db.medical_notes.create_index([("patient_name", 1)])
+        
         print("Connected to MongoDB!")
 
     async def close_mongodb_connection(self):
@@ -24,9 +29,5 @@ class MongoDB:
     def medical_notes(self):
         return self.db.medical_notes
 
-    @property
-    def extractions(self):
-        return self.db.extractions
 
-# Create a global instance
 db = MongoDB()
