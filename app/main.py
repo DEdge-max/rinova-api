@@ -108,27 +108,32 @@ async def check_system_health() -> Dict[str, Any]:
 # Database Connection Handling
 @app.on_event("startup")
 async def startup_db_client():
-    """Initialize database connection, perform startup checks, and create indexes"""
+    """Initialize database connection and create indexes"""
     try:
         await db.connect_to_mongodb()
         await db.client.admin.command('ping')
         logger.info("✅ Connected to MongoDB!")
 
-        # Create indexes matching our new schema
+        # Create indexes after we have a valid connection
         try:
+            database = db.get_db()
+            medical_notes = database.medical_notes
+
             indexes = [
-                IndexModel([("date", DESCENDING)], background=True),
-                IndexModel([("doctor_name", ASCENDING)], background=True),
-                IndexModel([("patient_name", ASCENDING)], background=True),
-                IndexModel([("note_text", TEXT)], background=True),
-                IndexModel([("extraction_result.icd10_codes.code", ASCENDING)], background=True),
-                IndexModel([("extraction_result.cpt_codes.code", ASCENDING)], background=True),
-                IndexModel([("extraction_result.hcpcs_codes.code", ASCENDING)], background=True)
+                IndexModel([("date", DESCENDING)]),
+                IndexModel([("doctor_name", ASCENDING)]),
+                IndexModel([("patient_name", ASCENDING)]),
+                IndexModel([("note_text", TEXT)]),
+                IndexModel([("extraction_result.icd10_codes.code", ASCENDING)]),
+                IndexModel([("extraction_result.cpt_codes.code", ASCENDING)]),
+                IndexModel([("extraction_result.hcpcs_codes.code", ASCENDING)])
             ]
-            await db.medical_notes.create_indexes(indexes)
+            
+            await medical_notes.create_indexes(indexes)
             logger.info("✅ Database indexes created successfully!")
         except Exception as e:
             logger.error(f"❌ Failed to create indexes: {str(e)}")
+            # Don't raise the exception - allow the app to start even if index creation fails
 
         await check_system_health()
     except Exception as e:
