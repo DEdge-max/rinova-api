@@ -64,6 +64,17 @@ async def get_note(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Note with ID {note_id} not found"
             )
+
+        # Ensure extraction_result always exists
+        if note.extraction_result is None:
+            note.extraction_result = {
+                "icd10_codes": [],
+                "cpt_codes": [],
+                "alternative_cpts": [],
+                "modifiers": [],
+                "hcpcs_codes": []
+            }
+
         return NoteResponse(
             message="Note retrieved successfully",
             note=note
@@ -93,4 +104,70 @@ async def create_note(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create note: {str(e)}"
+        )
+
+@router.put("/notes/{note_id}", response_model=NoteResponse)
+async def update_note(
+    note_id: str,
+    note_update: NoteUpdate,
+    repository: MedicalNotesRepository = Depends(get_repository)
+):
+    """Update an existing medical note."""
+    try:
+        object_id = validate_object_id(note_id)
+        updated = await repository.update_note(str(object_id), note_update)
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Note with ID {note_id} not found"
+            )
+        updated_note = await repository.get_note_by_id(str(object_id))
+        return NoteResponse(
+            message="Note updated successfully",
+            note=updated_note
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update note: {str(e)}"
+        )
+
+### 🚀 **RESTORED `extract_codes` ENDPOINT** ###
+@router.post("/extract", response_model=ExtractionResponse)
+async def extract_codes(
+    note_id: str,
+    repository: MedicalNotesRepository = Depends(get_repository)
+):
+    """Extract medical codes from a note's text using OpenAI."""
+    try:
+        object_id = validate_object_id(note_id)
+
+        # Get the note
+        note = await repository.get_note_by_id(str(object_id))
+        if not note:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Note with ID {note_id} not found"
+            )
+
+        # Extract codes using OpenAI
+        extraction_result = await openai_service.extract_codes(note.note_text)
+
+        # Update note with extracted codes
+        note_update = NoteUpdate(extraction_result=extraction_result)
+        updated_note = await repository.update_note(str(object_id), note_update)
+
+        return ExtractionResponse(
+            message="Codes extracted successfully",
+            extraction_result=extraction_result
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to extract codes: {str(e)}"
         )
