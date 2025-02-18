@@ -14,16 +14,14 @@ from app.models.pydantic_models import (
 )
 from app.services.openai_service import openai_service
 from app.repositories.medical_notes import MedicalNotesRepository
-from app.database.mongodb import db  # Ensure MongoDB connection is available
 
 router = APIRouter(prefix="/api/v1", tags=["medical-notes"])
 
-# Create repository instance with a database connection
-notes_repository = MedicalNotesRepository(db.get_db())
+# Lazy initialization of repository
+notes_repository = MedicalNotesRepository()
 
-# Dependency for initialization
 async def get_repository():
-    """Get initialized repository instance."""
+    """Ensure repository is initialized before use."""
     await notes_repository.initialize()
     return notes_repository
 
@@ -95,32 +93,4 @@ async def create_note(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create note: {str(e)}"
-        )
-
-@router.put("/notes/{note_id}", response_model=NoteResponse)
-async def update_note(
-    note_id: str,
-    note_update: NoteUpdate,
-    repository: MedicalNotesRepository = Depends(get_repository)
-):
-    """Update an existing medical note."""
-    try:
-        object_id = validate_object_id(note_id)
-        updated = await repository.update_note(str(object_id), note_update)
-        if not updated:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Note with ID {note_id} not found"
-            )
-        updated_note = await repository.get_note_by_id(str(object_id))
-        return NoteResponse(
-            message="Note updated successfully",
-            note=updated_note
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update note: {str(e)}"
         )
