@@ -151,7 +151,7 @@ Your response must be valid JSON matching this exact structure:
                 ],
                 temperature=0.0,
                 max_tokens=4000,
-                response_format={"type": "json"}
+                response_format="json_object"  # UPDATED PARAMETER TO MATCH OPENAI REQUIREMENTS
             )
             logger.info("Successfully received completion from OpenAI")
             return response.choices[0].message.content
