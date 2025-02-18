@@ -26,7 +26,6 @@ class BaseCode(BaseModel):
     confidence_score: float = Field(..., ge=0, le=100, description="Confidence score (0-100%)")
     suggestions: List[str] = Field(default=[], description="Suggestions for improving documentation")
 
-# Rest of your models remain the same...
 class ICD10Code(BaseCode):
     pass
 
@@ -91,3 +90,9 @@ class NotesListResponse(BaseModel):
 class ExtractionResponse(BaseModel):
     message: str
     extraction_result: CodeExtractionResult
+
+class QuickExtractionRequest(BaseModel):
+    note_text: str
+    doctor_name: Optional[str] = "Unknown"
+    patient_name: Optional[str] = "Unknown"
+    date: Optional[datetime] = None
