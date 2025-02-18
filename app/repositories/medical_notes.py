@@ -23,9 +23,9 @@ class MedicalNotesRepository:
 
     async def initialize(self):
         """Ensure the database connection is established."""
-        if self.database is None:  # ✅ FIXED: Explicit comparison
-            self.database = db.get_db()  # ✅ Ensure database is set
-            if self.database is None:  # ✅ Double-check connection
+        if self.database is None:  # ✅ FIXED: Explicit check
+            self.database = db.get_db()
+            if self.database is None:
                 raise RuntimeError("Database connection failed: db.get_db() returned None")
 
             self.collection = self.database["medical_notes"]
@@ -43,6 +43,14 @@ class MedicalNotesRepository:
             async for document in cursor:
                 logger.debug(f"Raw document from DB: {document}")
                 try:
+                    # Ensure extraction_result always exists
+                    document.setdefault("extraction_result", {
+                        "icd10_codes": [],
+                        "cpt_codes": [],
+                        "alternative_cpts": [],
+                        "modifiers": [],
+                        "hcpcs_codes": []
+                    })
                     note = MedicalNote(**document)
                     notes.append(note)
                 except Exception as e:
@@ -58,6 +66,14 @@ class MedicalNotesRepository:
         try:
             document = await self.collection.find_one({"_id": ObjectId(note_id)})
             if document:
+                # Ensure extraction_result always exists
+                document.setdefault("extraction_result", {
+                    "icd10_codes": [],
+                    "cpt_codes": [],
+                    "alternative_cpts": [],
+                    "modifiers": [],
+                    "hcpcs_codes": []
+                })
                 return MedicalNote(**document)
             return None
         except Exception as e:
@@ -71,6 +87,13 @@ class MedicalNotesRepository:
             note_dict = note_data.dict()
             note_dict["created_at"] = datetime.utcnow()
             note_dict["updated_at"] = datetime.utcnow()
+            note_dict["extraction_result"] = {  # ✅ Ensure extraction_result exists
+                "icd10_codes": [],
+                "cpt_codes": [],
+                "alternative_cpts": [],
+                "modifiers": [],
+                "hcpcs_codes": []
+            }
             result = await self.collection.insert_one(note_dict)
             return str(result.inserted_id)
         except Exception as e:
@@ -108,7 +131,7 @@ class MedicalNotesRepository:
         try:
             result = await self.collection.update_one(
                 {"_id": ObjectId(note_id)},
-                {"$set": {"icd_codes": extraction_result.codes, "updated_at": datetime.utcnow()}}
+                {"$set": {"extraction_result": extraction_result.dict(), "updated_at": datetime.utcnow()}}
             )
             return result.modified_count > 0
         except Exception as e:
