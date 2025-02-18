@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 from bson import ObjectId
+from bson.errors import InvalidId
 
 from app.models.pydantic_models import (
     MedicalNote,
@@ -16,14 +17,30 @@ from app.repositories.medical_notes import MedicalNotesRepository
 
 router = APIRouter(prefix="/api/v1", tags=["medical-notes"])
 
-# Initialize repository
+# Create repository instance
 notes_repository = MedicalNotesRepository()
 
+# Dependency for initialization
+async def get_repository():
+    """Get initialized repository instance."""
+    await notes_repository.initialize()
+    return notes_repository
+
+def validate_object_id(id: str) -> ObjectId:
+    """Validate and convert string ID to ObjectId."""
+    try:
+        return ObjectId(id)
+    except InvalidId:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid note ID format: {id}"
+        )
+
 @router.get("/notes", response_model=NotesListResponse)
-async def get_all_notes():
+async def get_all_notes(repository: MedicalNotesRepository = Depends(get_repository)):
     """Get all medical notes with their extracted codes."""
     try:
-        notes = await notes_repository.get_all_notes()
+        notes = await repository.get_all_notes()
         return NotesListResponse(
             message="Notes retrieved successfully",
             notes=notes
@@ -35,10 +52,14 @@ async def get_all_notes():
         )
 
 @router.get("/notes/{note_id}", response_model=NoteResponse)
-async def get_note(note_id: str):
+async def get_note(
+    note_id: str,
+    repository: MedicalNotesRepository = Depends(get_repository)
+):
     """Get a specific medical note by ID."""
     try:
-        note = await notes_repository.get_note_by_id(ObjectId(note_id))
+        object_id = validate_object_id(note_id)
+        note = await repository.get_note_by_id(object_id)
         if not note:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -48,20 +69,22 @@ async def get_note(note_id: str):
             message="Note retrieved successfully",
             note=note
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve note: {str(e)}"
         )
 
 @router.post("/notes", response_model=NoteResponse, status_code=status.HTTP_201_CREATED)
-async def create_note(note: NoteCreate):
+async def create_note(
+    note: NoteCreate,
+    repository: MedicalNotesRepository = Depends(get_repository)
+):
     """Create a new medical note."""
     try:
-        # Create note without extracted codes initially
-        new_note = await notes_repository.create_note(note)
+        new_note = await repository.create_note(note)
         return NoteResponse(
             message="Note created successfully",
             note=new_note
@@ -73,10 +96,15 @@ async def create_note(note: NoteCreate):
         )
 
 @router.put("/notes/{note_id}", response_model=NoteResponse)
-async def update_note(note_id: str, note_update: NoteUpdate):
+async def update_note(
+    note_id: str,
+    note_update: NoteUpdate,
+    repository: MedicalNotesRepository = Depends(get_repository)
+):
     """Update an existing medical note."""
     try:
-        updated_note = await notes_repository.update_note(ObjectId(note_id), note_update)
+        object_id = validate_object_id(note_id)
+        updated_note = await repository.update_note(object_id, note_update)
         if not updated_note:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -86,20 +114,25 @@ async def update_note(note_id: str, note_update: NoteUpdate):
             message="Note updated successfully",
             note=updated_note
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update note: {str(e)}"
         )
 
 @router.post("/extract", response_model=ExtractionResponse)
-async def extract_codes(note_id: str):
+async def extract_codes(
+    note_id: str,
+    repository: MedicalNotesRepository = Depends(get_repository)
+):
     """Extract medical codes from a note's text using OpenAI."""
     try:
+        object_id = validate_object_id(note_id)
+        
         # Get the note
-        note = await notes_repository.get_note_by_id(ObjectId(note_id))
+        note = await repository.get_note_by_id(object_id)
         if not note:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -111,16 +144,16 @@ async def extract_codes(note_id: str):
 
         # Update note with extracted codes
         note_update = NoteUpdate(extraction_result=extraction_result)
-        updated_note = await notes_repository.update_note(ObjectId(note_id), note_update)
+        updated_note = await repository.update_note(object_id, note_update)
 
         return ExtractionResponse(
             message="Codes extracted successfully",
             extraction_result=extraction_result
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise e
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to extract codes: {str(e)}"
