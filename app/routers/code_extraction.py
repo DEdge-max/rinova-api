@@ -179,14 +179,14 @@ async def quick_extract(
     request: QuickExtractionRequest,
     repository: MedicalNotesRepository = Depends(get_repository)
 ):
-    """Extract medical codes from note text and save to database with default values if needed."""
+    """Extract medical codes from note text and save to database with default values."""
     try:
-        # Create a new note with provided or default values
+        # Create a new note with default values
         note_create = NoteCreate(
-            doctor_name=request.doctor_name,
-            patient_name=request.patient_name,
+            doctor_name="Unknown",
+            patient_name="Unknown",
             note_text=request.note_text,
-            date=request.date or datetime.now()
+            date=datetime.now()
         )
 
         # Save note to database
