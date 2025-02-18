@@ -23,9 +23,9 @@ class MedicalNotesRepository:
 
     async def initialize(self):
         """Ensure the database connection is established."""
-        if self.database is None:
-            self.database = db.get_db()  # ✅ FIXED: No `await`
-            if not self.database:
+        if self.database is None:  # ✅ FIXED: Explicit comparison
+            self.database = db.get_db()  # ✅ Ensure database is set
+            if self.database is None:  # ✅ Double-check connection
                 raise RuntimeError("Database connection failed: db.get_db() returned None")
 
             self.collection = self.database["medical_notes"]
