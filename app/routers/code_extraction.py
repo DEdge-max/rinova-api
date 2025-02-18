@@ -228,9 +228,16 @@ async def save_sorted_codes(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Note with ID {note_id} not found"
             )
+        # Get current extraction result
+        current_extraction = note.extraction_result or CodeExtractionResult()
+        
+        # Update only the fields that were provided
+        update_data = updated_codes.dict(exclude_unset=True)
+        current_dict = current_extraction.dict()
+        current_dict.update(update_data)
         # Create updated extraction result
         note_update = NoteUpdate(
-            extraction_result=CodeExtractionResult(**updated_codes.dict())
+            extraction_result=CodeExtractionResult(**current_dict)
         )
         
         # Update the note
