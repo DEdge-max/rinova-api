@@ -20,7 +20,7 @@ class MedicalNotesRepository:
 
     async def initialize(self):
         """Initialize database connection and ensure collection exists"""
-        if not self.db:
+        if self.db is None:
             try:
                 self.db = db.get_db()
                 # Ensure collection exists
