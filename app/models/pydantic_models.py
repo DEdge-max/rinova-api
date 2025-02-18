@@ -9,17 +9,16 @@ class PyObjectId(ObjectId):
         yield cls.validate
 
     @classmethod
-    def validate(cls, v):  # Removed the extra argument
-        if not isinstance(v, ObjectId):
-            if not ObjectId.is_valid(v):
-                raise ValueError("Invalid ObjectId")
-            v = ObjectId(v)
-        return v
+    def validate(cls, value):
+        if isinstance(value, ObjectId):
+            return value
+        if not ObjectId.is_valid(value):
+            raise ValueError("Invalid ObjectId")
+        return ObjectId(value)
 
     @classmethod
-    def __get_pydantic_json_schema__(cls, core_schema, handler):
-        return {"type": "string"}
-
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(type="string")
 
 class BaseCode(BaseModel):
     code: str = Field(..., description="The medical code")
@@ -54,9 +53,13 @@ class CodeExtractionResult(BaseModel):
     hcpcs_codes: List[HCPCSCode] = Field(default=[], description="Extracted HCPCS codes")
 
 class MedicalNote(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, arbitrary_types_allowed=True, json_encoders={ObjectId: str})
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str}
+    )
     
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     doctor_name: str = Field(..., min_length=1)
     patient_name: str = Field(..., min_length=1)
     date: datetime = Field(default_factory=datetime.now)
