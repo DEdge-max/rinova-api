@@ -45,27 +45,27 @@ For each type of code (ICD-10, CPT, HCPCS):
   * 50-69%: Ambiguous, moderate confidence
   * Below 50%: Insufficient detail
 - Include suggestions for missing information
-- For CPT codes, provide alternative codes with justification Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly
+- For CPT codes, provide alternative codes with justification. Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly. Do not forget there are different CPT Codes based on different visit durations. For example 99202 is for 15 to 29-minute appointment of a NEW patient.
 
 Rules for different note types:
 1. For minimal notes (1-2 lines):
    - Provide basic E/M codes with low confidence scores
    - Suggest documentation improvements
    - Include probable diagnoses with very low confidence
-   - Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly
+   - Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly. Do not forget there are different CPT Codes based on different visit durations. For example 99202 is for 15 to 29-minute appointment of a NEW patient.
 
 2. For standard notes:
    - Extract all explicit diagnoses and procedures
    - Consider complexity and time for E/M coding
    - Include modifiers when justified
-   - Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly
+   - Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly. Do not forget there are different CPT Codes based on different visit durations. For example 99202 is for 15 to 29-minute appointment of a NEW patient.
 
 3. For comprehensive notes:
    - Detailed analysis of all conditions
    - Consider medical decision making
    - Include chronic care management if applicable
    - Add preventive service codes if relevant
-   - Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly
+   - Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly. Do not forget there are different CPT Codes based on different visit durations. For example 99202 is for 15 to 29-minute appointment of a NEW patient.
 
 Your response must be valid JSON matching this exact structure:
 {
