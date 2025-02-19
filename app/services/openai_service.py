@@ -67,48 +67,7 @@ Rules for different note types:
    - Add preventive service codes if relevant
    - Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly. Do not forget there are different CPT Codes based on different visit durations. For example 99202 is for 15 to 29-minute appointment of a NEW patient.
 
-   When coding medical notes, follow these guidelines to ensure accuracy, completeness, and compliance with coding standards:
-Thoroughly Review the Note:
-Read the entire note carefully, including the subjective, objective, assessment, and plan sections.
-Identify all documented diagnoses, symptoms, procedures, medications, and relevant patient history.
-Capture All Relevant Diagnoses:
-Code all active diagnoses, chronic conditions, and symptoms that are documented and relevant to the encounter.
-Include codes for conditions that are being monitored, treated, or impact patient care.
-Link Conditions Appropriately:
-If a condition is documented as being caused by or related to another condition (e.g., hypertension causing CKD), use combination codes (e.g., I12.0) when available.
-Do not separately code conditions that are included in a combination code unless explicitly required by coding guidelines.
-Follow ICD-10 Guidelines:
-Use the most specific ICD-10 code available based on the documentation.
-If there are additional codes that are applicable in combination, output them as well.
-Pay attention to laterality, severity, and other specificity requirements (e.g., acute vs. chronic, initial vs. subsequent encounter).
-Do not assume relationships between conditions unless explicitly documented by the provider.
-Include Relevant History and Status Codes:
-Code personal history (e.g., Z87.xxx) for resolved conditions or past surgeries that are relevant to the encounter.
-Use family history codes (e.g., Z80-Z84) when family history impacts patient care or risk assessment.
-Include status codes (e.g., Z79.xxx) for long-term medication use or ongoing treatment.
-Code Symptoms When Necessary:
-If a definitive diagnosis is not established, code symptoms (e.g., Rxx.x) that are documented and relevant to the encounter.
-Do not code symptoms that are integral to a diagnosed condition (e.g., do not code shortness of breath for a patient with congestive heart failure).
-Adhere to CPT and HCPCS Guidelines:
-Select CPT codes based on the level of service, time spent, and complexity of the encounter.
-Use modifiers (e.g., -25) when appropriate to indicate separate, significant services.
-Assign HCPCS codes for medications, supplies, or procedures not covered by CPT.
-Avoid Assumptions:
-Do not assume conditions, relationships, or procedures that are not explicitly documented.
-If documentation is unclear or incomplete, ask for clarification or additional information.
-Stay Updated on Coding Guidelines:
-Regularly review updates to ICD-10, CPT, and HCPCS coding guidelines to ensure compliance.
-Follow payer-specific requirements and local coverage determinations (LCDs) when applicable.
-Double-Check for Completeness:
-Ensure all documented conditions, procedures, and relevant factors are coded.
-Verify that codes are sequenced correctly, with the primary diagnosis listed first.
-Educate on Red Flags:
-Be aware of red flags in documentation (e.g., conflicting information, missing details) that may require clarification.
-Highlight potential coding errors or inconsistencies for review.
-Document Rationale for Coding Decisions:
-Provide a brief explanation for coding choices, especially for complex or ambiguous cases.
-This ensures transparency and facilitates auditing or review processes
-
+   
 Your response must be valid JSON matching this exact structure:
 {
   "icd10_codes": [
