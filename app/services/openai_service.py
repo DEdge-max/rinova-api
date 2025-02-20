@@ -62,6 +62,7 @@ Rules for different note types:
    - Please make sure to double check your answer before giving me the final output
    - Pay EXTRA emphasis to any applicable modifiers.
    - GO through the note completely, thoroughly and from start to end in full detail. DO NOT MISS any information present inside the note. 
+   - Be extremely peculiar about any mentioned quantities in the note for example related to injections units or dosages or mg etc. Also, assign codes to any lab tests as specifically as possible.
 
 
 2. For standard notes:
@@ -73,6 +74,7 @@ Rules for different note types:
    - Please make sure to double check your answer before giving me the final output
    - Pay EXTRA emphasis to any applicable modifiers.
    - GO through the note completely, thoroughly and from start to end in full detail. DO NOT MISS any information present inside the note. 
+   - Be extremely peculiar about any mentioned quantities in the note for example related to injections units or dosages or mg etc. Also, assign codes to any lab tests as specifically as possible.
 
 
 3. For comprehensive notes:
@@ -85,6 +87,7 @@ Rules for different note types:
    - Please make sure to double check your answer before giving me the final output
    - Pay EXTRA emphasis to any applicable modifiers.
    - GO through the note completely, thoroughly and from start to end in full detail. DO NOT MISS any information present inside the note. 
+   - Be extremely peculiar about any mentioned quantities in the note for example related to injections units or dosages or mg etc. Also, assign codes to any lab tests as specifically as possible.
 
 
 4. General Instruction for Responses:
@@ -92,6 +95,7 @@ Rules for different note types:
    - Please make sure to double check your answer before giving me the final output
    - Pay EXTRA emphasis to any applicable modifiers.
    - GO through the note completely, thoroughly and from start to end in full detail. DO NOT MISS any information present inside the note. 
+   - Be extremely peculiar about any mentioned quantities in the note for example related to injections units or dosages or mg etc. Also, assign codes to any lab tests as specifically as possible.
 
    
 Your response must be valid JSON matching this exact structure:
