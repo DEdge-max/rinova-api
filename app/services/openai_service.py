@@ -19,7 +19,7 @@ logger.setLevel(logging.INFO)
 class OpenAIService:
     def __init__(self):
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
-        self.model = "gpt-4-turbo-preview"
+        self.model = "gpt-4o-2024-08-06"
 
     async def extract_codes(self, note_text: str) -> CodeExtractionResult:
         """
