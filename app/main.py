@@ -41,18 +41,21 @@ app.include_router(
 )
 
 # CORS Configuration
-origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+origins = [
+    "https://rinova.netlify.app",
+    "http://localhost:3000",
+    "http://localhost:5173"
+]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"],
+    allow_headers=["*"],
     expose_headers=["Content-Length"],
     max_age=3600,
 )
-
 # System Health Cache
 system_status_cache = {
     "last_check": None,
