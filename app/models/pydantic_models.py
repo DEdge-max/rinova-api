@@ -59,8 +59,7 @@ class UpdatedCodes(BaseModel):
     hcpcs_codes: Optional[List[HCPCSCode]] = Field(default=None, description="Final sorted HCPCS codes")
     alternative_cpts: Optional[List[AlternativeCPT]] = Field(default=None, description="Remaining alternative CPTs")
 
-    
-    class MedicalNote(BaseModel):
+class MedicalNote(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
