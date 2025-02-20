@@ -27,6 +27,10 @@ notes_repository = MedicalNotesRepository()
 async def get_repository():
     """Ensure repository is initialized before use."""
     await notes_repository.initialize()
+    try:
+        await notes_repository.repair_missing_fields()  # Add this method
+    except Exception as e:
+        print(f"Error repairing fields: {e}")
     return notes_repository
 
 def validate_object_id(id: str) -> ObjectId:
