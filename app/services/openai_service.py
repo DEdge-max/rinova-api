@@ -67,6 +67,10 @@ Rules for different note types:
    - Add preventive service codes if relevant
    - Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly. Do not forget there are different CPT Codes based on different visit durations. For example 99202 is for 15 to 29-minute appointment of a NEW patient.
 
+4. General Instruction for Responses:
+   - Please make sure to include ALL relevant and potential codes that could be applicable to the note. Simply assign them different confidence levels based on which ones you think are most applicable. 
+   - Please make sure to double check your answer before giving me the final output
+
    
 Your response must be valid JSON matching this exact structure:
 {
