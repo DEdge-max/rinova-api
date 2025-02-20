@@ -38,6 +38,9 @@ class MedicalNotesRepository:
         """Retrieve all medical notes from the database."""
         await self.initialize()
         try:
+            # First repair any documents with missing fields
+            await self.repair_missing_fields()
+            
             cursor = self.collection.find()
             notes = []
             async for document in cursor:
@@ -137,3 +140,40 @@ class MedicalNotesRepository:
         except Exception as e:
             logger.error(f"Error attaching codes to note {note_id}: {e}")
             return False
+
+    async def repair_missing_fields(self):
+        """Repair documents with missing required fields."""
+        await self.initialize()
+        try:
+            default_update = {
+                "$set": {
+                    "doctor_name": "Unknown",
+                    "patient_name": "Unknown",
+                    "note_text": "",
+                    "date": datetime.utcnow(),
+                    "extraction_result": {
+                        "icd10_codes": [],
+                        "cpt_codes": [],
+                        "alternative_cpts": [],
+                        "modifiers": [],
+                        "hcpcs_codes": []
+                    }
+                }
+            }
+            
+            result = await self.collection.update_many(
+                {
+                    "$or": [
+                        {"doctor_name": {"$exists": False}},
+                        {"patient_name": {"$exists": False}},
+                        {"note_text": {"$exists": False}},
+                        {"date": {"$exists": False}},
+                        {"extraction_result": {"$exists": False}}
+                    ]
+                },
+                default_update,
+                upsert=False
+            )
+            logger.info(f"Repaired {result.modified_count} documents with missing fields")
+        except Exception as e:
+            logger.error(f"Error repairing documents: {e}")
