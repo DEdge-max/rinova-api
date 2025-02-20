@@ -59,7 +59,8 @@ class UpdatedCodes(BaseModel):
     hcpcs_codes: Optional[List[HCPCSCode]] = Field(default=None, description="Final sorted HCPCS codes")
     alternative_cpts: Optional[List[AlternativeCPT]] = Field(default=None, description="Remaining alternative CPTs")
 
-class MedicalNote(BaseModel):
+    
+    class MedicalNote(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True,
@@ -67,10 +68,10 @@ class MedicalNote(BaseModel):
     )
     
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-    doctor_name: str = Field(..., min_length=1)
-    patient_name: str = Field(..., min_length=1)
-    date: datetime = Field(default_factory=datetime.now)
-    note_text: str = Field(..., min_length=1)
+    doctor_name: Optional[str] = Field(default=None)
+    patient_name: Optional[str] = Field(default=None)
+    date: Optional[datetime] = Field(default_factory=datetime.now)
+    note_text: Optional[str] = Field(default=None)
     extraction_result: Optional[CodeExtractionResult] = None
 
 class NoteCreate(BaseModel):
