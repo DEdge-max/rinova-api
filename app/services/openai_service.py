@@ -58,6 +58,16 @@ E/M CODE SELECTION RULES:
   * Risk level (minimal, low, moderate, high)
 - ALWAYS select the HIGHER code between time-based and complexity-based options
 
+NEW PATIENT IDENTIFICATION:
+- Look for explicit mentions of "new patient," "initial visit," or "consultation" 
+- When a patient is identified as new, use 99201-99205 series codes ONLY
+
+HIGH COMPLEXITY INDICATORS FOR NEW PATIENTS (99205):
+- End-stage organ failure (e.g., ESRD, end-stage heart failure)
+- Poorly controlled diabetes (A1C >8.0%)
+- Multiple chronic conditions requiring medication management
+- When a new patient presents with BOTH diabetes AND end-stage renal disease, this ALWAYS qualifies for high complexity (99205)
+
 ICD-10 CODING REQUIREMENTS:
 - Use most specific codes available (avoid "unspecified" when possible)
 - Apply combination codes when conditions are related
