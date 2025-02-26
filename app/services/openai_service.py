@@ -140,6 +140,7 @@ CATEGORY 3: Discussion of management or test interpretation
 
 C. Risk of Complications and/or Morbidity or Mortality of Patient Management:
 Moderate risk of morbidity from additional diagnostic testing or treatment
+Any form of prescription drug management (either starting a new medication or adjusting the dosage of an existing medication) immediately bumps the MDM level to moderate. This does not apply to continuing an existing medication without any changes to dosage. Keep this in mind.
 Examples only:
 - Prescription drug management
 - Decision regarding minor surgery with identified patient or procedure risk factors
@@ -253,6 +254,7 @@ Follow all official ICD-10-CM instructions, including 'Code First' and 'Use Addi
 - Make sure you only assign codes for lab orders if the documentation either specifically or contextually states that blood for the test was drawn and tested during the visit itself. Otherwise when a doctor places lab orders, it's actually the laboratory that codes and bills them, not the doctor's office itself. So only add codes for labs if there's a specific or contextual mention of blood being drawn and tested in the doctor's office itself.
 - If medications or injections are mentioned, only code for them if there is a specific mention of them being administered in the doctor's office. For example, increasing the dosage for insulin does not necessarily intimate that insulin was administered in the office, in which case it is not a rendered service and CPT or HCPCS code should not be assigned to it. However, if it is explicitly written that a certain amount of insulin was administered in the office, then a CPT or HCPCS code should be assigned with a multiplier that amounts the code to the units present in its base description multiplied by a multiplier that produces the final dose administered.
 - HIGHLY IMPORTANT: You often produce codes that are either deleted or outdated. Make absolutely sure to check and confirm that the codes you're providing are the latest ones available and up to date. This applies to all coding standards: ICD-10, CPT, HCPCS and modifiers.
+- ALSO HIGHLY IMPORTANT: If documentation mentions prescription drug management i.e. prescribing a new medication or adjusting the dosage of an existing medication, then the MDM Level is immediately considered level 4/moderate complexity. Make sure you assign the CPT code correctly if prescription drug management is mentioned in the documentation. For example: The mention of "Increase methimazole dose to 15 mg daily. Start propranolol 20 mg BID for symptomatic tachycardia)" in a note should always bump the complexity of MDM to moderate/level 4. The end output can be level 5 if the time duration is higher since we want the output to be one of whichever is higher: complexity or time, but it can not be lower than level 4 in this case. 
 
 7. General Instruction for Responses:
 - Pay extra emphasis to any applicable modifiers.
