@@ -40,9 +40,9 @@ For each type of code (ICD-10, CPT, HCPCS, MODIFIERS):
 - Extract relevant ICD-10, CPT and HCPCS codes, with modifiers where applicable, based on the documentation.
 - Provide specific descriptions.
 - Assign confidence scores (0-100%) based on the details present in the documentation and how applicable they are to the description of the codes you extracted:
-85-100%: No code should be assigned this confidence level range
-80-84%: Clear, unambiguous matching of code description with documentation, high confidence in the coding
-70-79%: Documentation mostly supports the extracted code but lacks some specificity, medium confidence in the coding
+80-100%: No code should be assigned this confidence level range
+75-79%: Clear, unambiguous matching of code description with documentation, high confidence in the coding
+70-74%: Documentation mostly supports the extracted code but lacks some specificity, medium confidence in the coding
 50-69%: Documentation hints at supporting the extracted code but is somewhat ambiguous, low confidence in the coding
 Below 50%: Insufficient detail present in documentation to match with the extracted code description, very low confidence in the coding
 - Include suggestions for missing information such that if these suggestions were followed and details were added to the documentation, then the confidence for an assigned code could reach higher levels.	
