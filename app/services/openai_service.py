@@ -40,11 +40,11 @@ For each type of code (ICD-10, CPT, HCPCS, MODIFIERS):
 - Extract relevant ICD-10, CPT and HCPCS codes, with modifiers where applicable, based on the documentation.
 - Provide specific descriptions.
 - Assign confidence scores (0-100%) based on the details present in the documentation and how applicable they are to the description of the codes you extracted:
-75-100%: No code should be assigned this confidence level range
-70-75%: Clear, unambiguous matching of code description with documentation, high confidence in the coding
-65-69%: Documentation mostly supports the extracted code but lacks some specificity, medium confidence in the coding
-50-65%: Documentation hints at supporting the extracted code but is somewhat ambiguous, low confidence in the coding
-Below 50%: Insufficient detail present in documentation to match with the extracted code description, very low confidence in the coding
+90-100%: Clear, unambiguous matching of code description with documentation, very high confidence in the coding
+70-89%: Documentation mostly supports the extracted code but lacks some specificity, high confidence in the coding
+50-69%: Documentation hints at supporting the extracted code but is somewhat ambiguous, moderate confidence in the coding
+Below 50%: Insufficient detail present in documentation to match with the extracted code description, low confidence in the coding
+- VERY IMPORTANT: If there are more than 2 ICD codes for any output, ensure that you assign accurate confidence levels to only two of them. The rest should all be assigned confidence scores lower than 70%.
 - Include suggestions for missing information such that if these suggestions were followed and details were added to the documentation, then the confidence for an assigned code could reach higher levels.	
 - Place CPT codes (excluding E/M codes) with high confidence in the "cpt_codes" output, while placing CPT codes with low confidence in the "alternative_cpts" output.
 - For E/M codes in particular:
@@ -139,6 +139,7 @@ Follow all official ICD-10-CM instructions, including 'Code First' and 'Use Addi
 - If medications or injections are mentioned, only code for them if there is a specific mention of them being administered in the doctor's office. For example, increasing the dosage for insulin does not necessarily intimate that insulin was administered in the office, in which case it is not a rendered service and CPT or HCPCS code should not be assigned to it. However, if it is explicitly written that a certain amount of insulin was administered in the office, then a CPT or HCPCS code should be assigned with a multiplier that amounts the code to the units present in its base description multiplied by a multiplier that produces the final dose administered.
 - HIGHLY IMPORTANT: You often produce codes that are either deleted or outdated. Make absolutely sure to check and confirm that the codes you're providing are the latest ones available and up to date. This applies to all coding standards: ICD-10, CPT, HCPCS and modifiers.
 - For CPT codes, while you are to definitely assign E/M codes, you are also to assign any and all other applicable CPT codes after contextually understanding the documentation as well. For example, any time a subcutaneous or intramuscular injection is administered in the office, the CPT code of 96372 is applicable. This code is not an E/M code, but it should still be mentioned if the documentation contains a mention of it.
+- Analyse the MDM Level and assign the complexity to the E/M code with as much analysis and detail as you can.
 
 7. General Instruction for Responses:
 - Pay extra emphasis to any applicable modifiers.
@@ -156,6 +157,7 @@ Below are some examples of mistakes you've made in your coding output. I want yo
 - In one note you coded, the HPI clearly stated that the patient had hypertensive heart disease with left ventricular failure and end stage renal disease on hemodialysis. In your ICD-10 coding output, you produced I11.0 (Hypertensive heart disease with heart failure) and N18.6 (End stage renal disease). The correct ICD-10 coding should have been I13.2 (Hypertensive heart and chronic kidney disease with heart failure and with stage 5 chronic kidney disease, or end stage renal disease), I50.1 (Left ventricular failure, unspecified), N18.6 (End stage renal disease) and Z99.2 (Hemodialysis). As you can see from this example, the combination code I13.2 covers all major diseases and their complications present in the note in one code, while also listing the individual diseases/complications separately - which is what the true output should be when following ICD-10 coding guidelines.
 - In one note, the HPI mentioned type 2 diabetes mellitus and hypertensive chronic kidney disease. Your ICD-10 coding output was: E11.22 (Type 2 diabetes mellitus with diabetic chronic kidney disease), I12.9 (Hypertensive chronic kidney disease with stage 1 through stage 4 chronic kidney disease, or unspecified chronic kidney disease) and N18.3 (Chronic kidney disease, stage 3 unspecified). While I12.9 is correct, the other two codes should be: E11.9 (Type 2 diabetes mellitus without complications) and N18.30 (Chronic kidney disease, stage 3 unspecified). This is because it could be contextually understood from the documentation that the chronic kidney disease was related to hypertension, but not to diabetes. So producing E11.22 is completely incorrect. As for N18.3, its correct form is N18.30.
 - When given an office visit note for an established patient of moderate complexity MDM which contained a mention of in-office administration of insulin injection, you assigned the E/M code, modifier and HCPCS code correctly, but you failed to assign the other CPT code of 96372 (Therapeutic, prophylactic, or diagnostic injection (specify substance or drug); subcutaneous or intramuscular). This should have been part of the coding output as well.
+- There are notes that I think should be level 5 in complexity, but you keep giving an output where they're level 4. Please make sure you're double checking and confirming your MDM level analysis.
 
 Your response must be valid JSON matching this exact structure:
 
