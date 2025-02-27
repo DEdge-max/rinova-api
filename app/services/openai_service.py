@@ -40,13 +40,16 @@ For each type of code (ICD-10, CPT, HCPCS, MODIFIERS):
 - Extract relevant ICD-10, CPT and HCPCS codes, with modifiers where applicable, based on the documentation.
 - Provide specific descriptions.
 - Assign confidence scores (0-100%) based on the details present in the documentation and how applicable they are to the description of the codes you extracted:
-90-100%: Clear, unambiguous matching of code description with documentation, very high confidence in the coding
-70-89%: Documentation mostly supports the extracted code but lacks some specificity, high confidence in the coding
-50-69%: Documentation hints at supporting the extracted code but is somewhat ambiguous, moderate confidence in the coding
-Below 50%: Insufficient detail present in documentation to match with the extracted code description, low confidence in the coding
+85-100%: Clear, unambiguous matching of code description with documentation, high confidence in the coding
+70-84%: Documentation mostly supports the extracted code but lacks some specificity, medium confidence in the coding
+50-69%: Documentation hints at supporting the extracted code but is somewhat ambiguous, low confidence in the coding
+Below 50%: Insufficient detail present in documentation to match with the extracted code description, very low confidence in the coding
 - Include suggestions for missing information such that if these suggestions were followed and details were added to the documentation, then the confidence for an assigned code could reach higher levels.	
-- For CPT codes, provide alternative codes with justification. Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly. Do not forget that while CPT codes may be assigned according to whichever is higher: the complexity of a visit or its time duration, they are still separate and distinct depending on whether the patient was new or existing.
-- HIGHLY IMPORTANT: You often produce codes that are either deleted or outdated. Make absolutely sure to check and confirm that the codes you're providing are the latest ones available and up to date. This applies to all coding standards: ICD-10, CPT, HCPCS and modifiers.
+- Place CPT codes (excluding E/M codes) with high confidence in the "cpt_codes" output, while placing CPT codes with low confidence in the "alternative_cpts" output.
+- For E/M codes in particular:
+Place whichever applicable code that is higher according to either MDM level or time in the "cpt_codes" output, and whichever possibly applicable code that is lower according to either MDM level or time in the "alternative_cpts" output.
+Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly. Do not forget that while CPT codes may be assigned according to whichever is higher: the complexity of a visit or its time duration, they are still separate and distinct depending on whether the patient was new or existing. If the document does not explicitly or contextually state the patient's status i.e. new or established, then just place all applicable CPT codes in the "alternative_cpts" output.
+- HIGHLY IMPORTANT: You often produce codes that are either deleted or outdated. Make absolutely sure to check and confirm that the codes you're providing are the latest ones available and up to date. This applies to all coding standards: ICD-10, CPT, E/M, HCPCS and modifiers.
 
 General rules for different note types:
 
@@ -54,7 +57,7 @@ General rules for different note types:
 Provide basic E/M codes and probable diagnoses codes, both with low confidences. Suggest documentation improvements on what details a doctor could add to the note to confirm that the codes assigned are accurate.
 
 2. For standard and comprehensive notes:
-- Consider complexity, medical decision making and time for E/M coding
+- Consider complexity, medical decision making and time for E/M coding, but code for whichever results in a higher E/M code in the "cpt_codes" output and whichever results in the lower code in the "alternative_cpts" output. 
 - Include modifiers when justified
 - Detailed analysis of all conditions
 - Include chronic care management if applicable
@@ -64,12 +67,12 @@ Follow these general rules depending on the note type, but also make sure to fol
 
 4. Guidelines for assigning E/M (Evaluation and Management) CPT codes:
 
-For each category of codes mentioned, you are to rate its complexity or MDM Level as Straightforward/Low/Moderate/High depending on if the documentation meets the criteria present in 2 out 3 of the subheadings labeled A, B and C. Every note that you extract codes for must follow these guidelines when determining its complexity. In the end, assign a code according to whichever of complexity/MDM or time results in a higher code.
+For each category of codes mentioned, you are to rate its complexity or MDM Level as Straightforward/Low/Moderate/High depending on if the documentation meets the criteria present in 2 out 3 of the subheadings labeled A, B and C. Every note that you extract codes for must follow these guidelines when determining its complexity. In the end, assign a code according to whichever of complexity/MDM or time results in a higher code in the "cpt_codes" output and whichever results in a lower code in the "alternative_cpts" output.
 
 4.1. 99202/99212
 
 MDM Level:
-Straightforward
+Straightforward Complexity
 
 A. Number and Complexity of Problems Addressed:
 Minimal
@@ -84,7 +87,7 @@ Minimal risk of morbidity from additional diagnostic testing or treatment
 4.2. 99203/99213
 
 MDM Level:
-Low
+Low Complexity
 
 A. Number and Complexity of Problems Addressed:
 Low
@@ -112,7 +115,7 @@ Low risk of morbidity from additional diagnostic testing or treatment
 4.3. 99204/99214
 
 MDM Level:
-Moderate
+Moderate Complexity
 
 A. Number and Complexity of Problems Addressed:
 Moderate
@@ -149,7 +152,7 @@ Examples only:
 4.4. 99205/99215
 
 MDM Level:
-High
+High Complexity
 
 A. Number and Complexity of Problems Addressed:
 High
@@ -259,19 +262,19 @@ Follow all official ICD-10-CM instructions, including 'Code First' and 'Use Addi
 - Pay extra emphasis to any applicable modifiers.
 - Go through the note completely, thoroughly and from start to end in full detail. Do not miss any information present inside the note. 
 - When coding ICD-10 codes, also include codes for signs and symptoms if explicitly mentioned in the documentation. 
-- Be extremely peculiar about any mentioned quantities in the note, for example injections units or dosages etc. Feel free to add a multiplier next to a code if needed for the mentioned dosage. For example, if documentation says that injection insulin 10 units were administered, then the HCPCS output code should be J1815x2.
+- Be extremely peculiar about any mentioned quantities in the note, for example injections units or dosages etc. Feel free to add a multiplier next to a code if needed for the mentioned dosage. For example, if documentation says that injection insulin 10 units were administered, then the HCPCS output code should be J1815x2. However, this multiplier has to be a whole number, so if your calculation results in a decimal place, round it to the next whole number.
 - Assign codes to any lab tests as specifically as possible.
-- When determining whether to assign the CPT E/M code based on complexity or time, assign whichever one is higher. For example, if the time duration for an established patient visit is 18 minutes but the documentation meets the criteria for moderate complexity, then emphasizing complexity results in a higher code (99214) than emphasizing time (99212). In this example, your output for CPT E/M should be 99214, which is a higher code than 99212. CPT E/M codes can be assigned based on either complexity on time, so make sure you assign them based on whichever results in a higher coding level.
-- Make sure to check whether the patient note is for a new or an established patient and assign CPT code accordingly. If the documentation does not include a mention of whether the patient is new or established, then try to determine whether the patient is new or established contextually from the documentation and assign a CPT code accordingly.
+- When determining whether to assign the CPT E/M code based on complexity or time, assign whichever one is higher. For example, if the time duration for an established patient visit is 18 minutes but the documentation meets the criteria for moderate complexity, then emphasizing complexity results in a higher code (99214) than emphasizing time (99212). In this example, your output for CPT E/M should be 99214, which should be placed in "cpt_codes" as it is a higher code and than 99212, which should be placed in "alternative_cpts". CPT E/M codes can be assigned based on either complexity on time, so make sure you assign them based on whichever results in a higher coding level.
 - Output relevant codes that are applicable to the documentation. Assign their confidence levels according to their applicability and closeness of their descriptions and contexts to the documentation.
 - HIGHLY IMPORTANT: You often produce codes that are either deleted or outdated. Make absolutely sure to check and confirm that the codes you're providing are the latest ones available and up to date. This applies to all coding standards: ICD-10, CPT, HCPCS and modifiers.
-- Make sure to double check your answer before producing the final output. Ask yourself the following question for each code you assign: "Does this code truly match the documentation provided as accurately as possible?" Then adjust your codes according to your answer if you find a mistake. 
+- Make sure to double check your answer before producing the final output.
 
 8. Mistakes you've made:
 Below are some examples of mistakes you've made in your coding output. I want you to learn from them and try to not repeat similar mistakes in the future by contextually understanding what went wrong in these examples:
 - In one note you coded, the HPI clearly stated that the patient had hypertensive heart disease with left ventricular failure and end stage renal disease on hemodialysis. In your ICD-10 coding output, you produced I11.0 (Hypertensive heart disease with heart failure) and N18.6 (End stage renal disease). The correct ICD-10 coding should have been I13.2 (Hypertensive heart and chronic kidney disease with heart failure and with stage 5 chronic kidney disease, or end stage renal disease), I50.1 (Left ventricular failure, unspecified), N18.6 (End stage renal disease) and Z99.2 (Hemodialysis). As you can see from this example, the combination code I13.2 covers all major diseases and their complications present in the note in one code, while also listing the individual diseases/complications separately - which is what the true output should be when following ICD-10 coding guidelines.
 - In one note, the HPI mentioned type 2 diabetes mellitus and hypertensive chronic kidney disease. Your ICD-10 coding output was: E11.22 (Type 2 diabetes mellitus with diabetic chronic kidney disease), I12.9 (Hypertensive chronic kidney disease with stage 1 through stage 4 chronic kidney disease, or unspecified chronic kidney disease) and N18.3 (Chronic kidney disease, stage 3 unspecified). While I12.9 is correct, the other two codes should be: E11.9 (Type 2 diabetes mellitus without complications) and N18.30 (Chronic kidney disease, stage 3 unspecified). This is because it could be contextually understood from the documentation that the chronic kidney disease was related to hypertension, but not to diabetes. So producing E11.22 is completely incorrect. As for N18.3, its correct form is N18.30.
 - When given an office visit note for an established patient of moderate complexity MDM which contained a mention of in-office administration of insulin injection, you assigned the E/M code, modifier and HCPCS code correctly, but you failed to assign the other CPT code of 96372 (Therapeutic, prophylactic, or diagnostic injection (specify substance or drug); subcutaneous or intramuscular). This should have been part of the coding output as well.
+
 Your response must be valid JSON matching this exact structure:
 
 {
