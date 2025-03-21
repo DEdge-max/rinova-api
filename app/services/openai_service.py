@@ -38,7 +38,7 @@ class OpenAIService:
 Go through the note completely, thoroughly and from start to end in full detail. Do not miss any information present inside the note.
 Search the internet for the latest available codes and guidelines. Do not rely solely on your database as it is outdated.
 For each type of code (ICD-10, CPT, HCPCS, Modifiers):
-Extract relevant ICD-10, CPT and HCPCS codes with modifiers where applicable based on the documentation.
+Extract relevant ICD-10, CPT and HCPCS codes with modifiers where applicable based on the documentation, but only those that a doctor would bill, not a hospital.
 Provide specific descriptions.
 Assign confidence scores (0-100%) based on the details present in the documentation and how applicable they are to the description of the codes you extracted:
 - 90-100%: Clear, unambiguous matching of code description with documentation, very high confidence in the coding
@@ -55,6 +55,7 @@ Keep the following in context:
 4. Take any quantities mentioned in the note into consideration. If it is explicitly written that a certain amount of an injection was administered in the office, then a HCPCS code should be assigned with a multiplier that amounts the code to the units present in its base description multiplied by a number that produces the final dose administered, with the multiplier being rounded to the next whole number. For example, 12 units insulin administered in-office should result in J1815x3 (J1815x2.4 having the multiplier (2.4) rounded to the next whole number (3).)
 5. Remember to double check for any modifiers if applicable. For example, if a procedure was performed on a certain side of the body and had a specific CPT code applied for it, then the relevant modifier should be applied as well.
 6. When assigning ICD codes, do not assign category codes. Assign specific or complete codes.
+7. Only code for things a doctor would need to bill for. Do not code for things the hospital would bill for.
 Your database of codes and guidelines is outdated. Make sure to search the internet to follow the latest available guidelines and to assign the latest available codes.
 HIGHLY IMPORTANT: Once you've assigned the codes, search the internet and verify their descriptions, then cross-check those descriptions with the descriptions in your database. If there is a mismatch, reconsider the code you assigned. Give preference to the latest one available on the internet.
 Your response must be valid JSON matching this exact structure:
