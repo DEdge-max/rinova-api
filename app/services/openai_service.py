@@ -41,14 +41,17 @@ For each type of code (ICD-10, CPT, HCPCS, Modifiers):
 Extract relevant ICD-10, CPT and HCPCS codes with modifiers where applicable based on the documentation, but only those that a doctor would bill, not a hospital or facility.
 Provide specific descriptions.
 Assign confidence scores (0-100%) based on the details present in the documentation and how applicable they are to the description of the codes you extracted:
-- 90-100%: Clear, unambiguous matching of code description with documentation, very high confidence in the coding
-- 70-89%: Documentation mostly supports the extracted code but lacks some specificity, high confidence in the coding
-- 50-69%: Documentation hints at supporting the extracted code but is somewhat ambiguous, medium confidence in the coding
-- Below 50%: Insufficient detail present in documentation to match with the extracted code description, low confidence in the coding
+- 90-100%: Clear, unambiguous matching of code description with documentation, very high confidence in the coding.
+- 70-89%: Documentation mostly supports the extracted code but lacks some specificity, high confidence in the coding.
+- 50-69%: Documentation hints at supporting the extracted code but is somewhat ambiguous, medium confidence in the coding.
+- Below 50%: Insufficient detail present in documentation to match with the extracted code description, low confidence in the coding.
 Include suggestions for missing information such that if these suggestions were followed and details were added to the documentation, then the confidence for an assigned code could reach higher levels.
 Place CPT codes with high confidence in the "cpt_codes" output, while placing CPT codes with lower confidence in the "alternative_cpts" output.
-For E/M codes in particular: If an E/M code is applicable to the note, then analyze the complexity of the note in detail and provide the E/M code according to the MDM level. For additional context regarding outpatient office visits: remember that 992X2 is straightforward MDM, 992X3 is low MDM, 992X4 is moderate MDM, and 992X5 is high MDM. Determine the MDM complexity according to the latest E/M guidelines and assign the most relevant code when applicable in the "cpt_codes output". Place the second-most likely E/M code in the "alternative_cpts" output if E/M coding is applicable to the note.
-Keep the following in context:
+For when E/M codes are applicable in particular:
+- If an E/M code is applicable to the note, then analyze the complexity of the MDM present in the note in detail and decide on two E/M codes that would be most applicable. Determine this complexity by searching up the latest E/M coding guidelines available and using them as context.
+- Of the two E/M codes you decide on, the first should be one that most closely matches the MDM complexity of the note and is to be provided in the 'cpt_codes' output.
+- The second/other E/M code should be one that could be applicable if more justifications or details in the documentation were mentioned, and it is to be provided in the 'alternative_cpts' output.
+- For additional context regarding outpatient office visits: remember that 992X2 is straightforward MDM, 992X3 is low MDM, 992X4 is moderate MDM, and 992X5 is high MDM.
 Only code for details explicitly mentioned in the note. Do not code based on if something was done.
 If medications, topicals or injections are mentioned, only code for them if the note mentions them being provided, applied or administered. If they're only advised, prescribed, changed or have their dosage adjusted, then they do not need their own codes, but should still be considered for MDM complexity calculations. For example, increasing the dose of insulin does not mean insulin was administered in the office, and a code for insulin should only be added if there is an explicit mention of insulin being administered in the note. The dose adjustment should still be taken into account for MDM complexity determination, however.
 If a note mentions a test, only code for it if there is an explicit mention of the test being done in the provider's office. If it's contextually understood that the advised test is meant to be carried out at a lab or other facility, then there's no need to code for it. However, it should still be considered for purposes of MDM complexity determination.
