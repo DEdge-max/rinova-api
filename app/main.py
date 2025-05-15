@@ -43,6 +43,7 @@ app.include_router(
 # CORS Configuration
 origins = [
     "https://rinova.netlify.app",
+    "https://rinova-dev.netlify.app",
     "http://localhost:3000",
     "http://localhost:5173"
 ]
